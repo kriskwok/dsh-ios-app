@@ -63,7 +63,7 @@ struct ConversationDrawerView: View {
 
             ZStack(alignment: .bottomLeading) {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 8) {
+                    LazyVStack(alignment: .leading, spacing: 10) {
                         if isLoading && workspaces.isEmpty && ungroupedSessions.isEmpty {
                             HStack(spacing: 9) {
                                 ProgressView().controlSize(.small)
@@ -123,7 +123,7 @@ struct ConversationDrawerView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("服务器设置")
                 }
-                .padding(.leading, horizontalPadding + logoSize + logoSpacing)
+                .padding(.leading, horizontalPadding)
                 .padding(.trailing, horizontalPadding)
                 .padding(.bottom, 12)
                 .safeAreaPadding(.bottom, 8)
@@ -194,13 +194,13 @@ struct ConversationDrawerView: View {
 
     private func dshWorkspaceSection(_ workspace: AgentWorkspace) -> some View {
         let isExpanded = !collapsedWorkspaceIDs.contains(workspace.id)
-        return VStack(alignment: .leading, spacing: 0) {
+        return VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 8) {
                 Image(systemName: "folder.fill")
-                    .font(.subheadline)
+                    .font(.callout)
                     .foregroundStyle(.secondary)
                 Text(workspace.title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.callout.weight(.semibold))
                     .lineLimit(1)
 
                 Button {
@@ -245,31 +245,53 @@ struct ConversationDrawerView: View {
 
     private func hermesWorkspaceSection(_ workspace: AgentWorkspace, channel: AgentSessionChannel) -> some View {
         let key = "\(channel.id)|\(workspace.id)"
+        let isExpanded = !collapsedWorkspaceIDs.contains(key)
         let sessions = self.sessions(in: workspace, channel: channel)
-        return DisclosureGroup(isExpanded: expansionBinding(for: key)) {
-            Button {
-                onNewConversation(workspace.id)
-            } label: {
-                Label("在此工作区新建 iPhone 对话", systemImage: "plus")
-                    .font(.subheadline)
+        return VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 7)
+                    .rotationEffect(.degrees(isExpanded ? 0 : -90))
+                Image(systemName: "folder")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text(workspace.title)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
             }
-            .buttonStyle(.plain)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.snappy(duration: 0.2)) {
+                    if isExpanded {
+                        collapsedWorkspaceIDs.insert(key)
+                    } else {
+                        collapsedWorkspaceIDs.remove(key)
+                    }
+                }
+            }
 
-            ForEach(sessions) { session in
-                drawerSessionRow(session, workspaceID: workspace.id)
+            if isExpanded {
+                Button {
+                    onNewConversation(workspace.id)
+                } label: {
+                    Label("在此工作区新建 APP 对话", systemImage: "plus")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 7)
+                }
+                .buttonStyle(.plain)
+
+                ForEach(sessions) { session in
+                    drawerSessionRow(session, workspaceID: workspace.id)
+                }
             }
-        } label: {
-            Label(workspace.title, systemImage: "folder")
-                .font(.caption.weight(.semibold))
-                .lineLimit(1)
         }
-        .tint(.primary)
-        .padding(.leading, 10)
-        .padding(.trailing, 4)
-        .padding(.vertical, 3)
     }
 
     private func sessions(in workspace: AgentWorkspace, channel: AgentSessionChannel) -> [AgentSessionSummary] {
@@ -301,7 +323,7 @@ struct ConversationDrawerView: View {
         } label: {
             HStack(spacing: 9) {
                 Text(session.title)
-                    .font(.subheadline)
+                    .font(.callout)
                     .lineLimit(1)
                 Spacer(minLength: 4)
                 Text(SessionTimestampFormatter.string(for: session.updatedAt))
@@ -313,7 +335,7 @@ struct ConversationDrawerView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.vertical, 10)
             .background(
                 selectedSessionID == session.id ? Color.accentColor.opacity(0.12) : Color.clear,
                 in: RoundedRectangle(cornerRadius: 9, style: .continuous)
@@ -321,19 +343,6 @@ struct ConversationDrawerView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-    }
-
-    private func expansionBinding(for workspaceID: String) -> Binding<Bool> {
-        Binding(
-            get: { !collapsedWorkspaceIDs.contains(workspaceID) },
-            set: { expanded in
-                if expanded {
-                    collapsedWorkspaceIDs.remove(workspaceID)
-                } else {
-                    collapsedWorkspaceIDs.insert(workspaceID)
-                }
-            }
-        )
     }
 
     private func channelExpansionBinding(for channelID: String) -> Binding<Bool> {

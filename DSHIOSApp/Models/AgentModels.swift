@@ -85,17 +85,17 @@ struct AgentSessionChannel: Identifiable, Hashable, Sendable {
         let normalized = source?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
         switch normalized {
         case "ios", "iphone", "dsh-ios", "dsh-ios-app", "mobile":
-            self.init(id: "ios", title: "iPhone", systemImage: "iphone", sortOrder: 0)
-        case "desktop", "webui":
-            self.init(id: "desktop", title: "Desktop", systemImage: "desktopcomputer", sortOrder: 10)
-        case "cli":
-            self.init(id: "cli", title: "CLI", systemImage: "terminal", sortOrder: 20)
-        case "tui":
-            self.init(id: "tui", title: "TUI", systemImage: "rectangle.and.text.magnifyingglass", sortOrder: 30)
+            self.init(id: "ios", title: "APP", systemImage: "iphone", sortOrder: 0)
         case "weixin", "wechat":
-            self.init(id: "weixin", title: "微信", systemImage: "message.fill", sortOrder: 40)
+            self.init(id: "weixin", title: "微信", systemImage: "message.fill", sortOrder: 10)
         case "feishu", "lark":
-            self.init(id: "feishu", title: "飞书", systemImage: "paperplane.fill", sortOrder: 50)
+            self.init(id: "feishu", title: "飞书", systemImage: "paperplane.fill", sortOrder: 20)
+        case "cli":
+            self.init(id: "cli", title: "CLI", systemImage: "terminal", sortOrder: 30)
+        case "tui":
+            self.init(id: "tui", title: "TUI", systemImage: "rectangle.and.text.magnifyingglass", sortOrder: 40)
+        case "desktop", "webui":
+            self.init(id: "desktop", title: "桌面端", systemImage: "desktopcomputer", sortOrder: 50)
         case "subagent", "cron", "webhook", "api_server", "msgraph_webhook", "kanban", "tool":
             self.init(id: "automation", title: "自动任务", systemImage: "gearshape.2", sortOrder: 900)
         case "":

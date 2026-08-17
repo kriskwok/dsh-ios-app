@@ -19,7 +19,7 @@ struct MarkdownText: View {
                     .font(.body)
                     .foregroundStyle(.primary)
                     .multilineTextAlignment(.leading)
-                    .lineSpacing(3)
+                    .lineSpacing(5)
             }
         }
         .textSelection(.enabled)
@@ -315,7 +315,7 @@ struct MarkdownBlockView: View {
             .font(.body)
             .foregroundStyle(.primary)
             .multilineTextAlignment(.leading)
-            .lineSpacing(3)
+            .lineSpacing(5)
     }
 
     private func listRow(marker: String, text: String) -> some View {

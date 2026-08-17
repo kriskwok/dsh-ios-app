@@ -50,7 +50,7 @@ struct ChatSessionView: View {
         GeometryReader { container in
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 22) {
+                    LazyVStack(spacing: 24) {
                         if viewModel.isLoading && viewModel.messages.isEmpty {
                             ProgressView("正在读取会话…")
                                 .padding(.top, 80)
@@ -83,7 +83,7 @@ struct ChatSessionView: View {
                                 }
                             )
                     }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 20)
                     .padding(.vertical, 18)
                 }
                 .coordinateSpace(name: "chat-scroll")
