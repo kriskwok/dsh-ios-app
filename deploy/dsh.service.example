@@ -1,0 +1,20 @@
+[Unit]
+Description=DeepSeek Harness WebUI for dsh-ios-app
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=dsh
+Group=dsh
+WorkingDirectory=/srv/dsh/workspace
+Environment=DSH_HOME=/var/lib/dsh
+Environment=DSH_TELEMETRY_DISABLED=1
+ExecStart=/usr/bin/npx -y @deepseek-ai/dsh@0.1.0-rc.6 web --host 127.0.0.1 --port 3080
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,18 @@
+[Unit]
+Description=Hermes headless backend for dsh-ios-app
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hermes
+Group=hermes
+WorkingDirectory=/home/hermes
+Environment=HERMES_HOME=/home/hermes/.hermes
+EnvironmentFile=/etc/hermes/ios-remote.env
+ExecStart=/usr/local/bin/hermes serve --host 0.0.0.0 --port 9120 --skip-build
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

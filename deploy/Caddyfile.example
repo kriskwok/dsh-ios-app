@@ -1,0 +1,16 @@
+{$DSH_DOMAIN} {
+	encode zstd gzip
+
+	basic_auth {
+		{$DSH_USER} {$DSH_PASSWORD_HASH}
+	}
+
+	reverse_proxy {$DSH_UPSTREAM:127.0.0.1:3080} {
+		# DSH intentionally keeps settings, credentials, and preset-authoring
+		# endpoints loopback-only until it has its own authentication layer.
+		# Caddy supplies that layer, then presents the authenticated request to
+		# DSH as same-origin loopback traffic. WebSocket upgrades are proxied too.
+		header_up Host {$DSH_UPSTREAM:127.0.0.1:3080}
+		header_up Origin http://{$DSH_UPSTREAM:127.0.0.1:3080}
+	}
+}

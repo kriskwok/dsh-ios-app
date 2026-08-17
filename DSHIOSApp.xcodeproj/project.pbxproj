@@ -1,0 +1,665 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		126FEE1A63FE62C73A1940FD /* AgentGatewayFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37DCC07F7663940E44AEDD0C /* AgentGatewayFactory.swift */; };
+		1648E5841353888D82FE92A4 /* DSHUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = F610C8B9ABF35500CF6D1C7F /* DSHUI.swift */; };
+		1A9C871D62CAB45074A23DB6 /* ServerProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 078CD723F432C48D027D5BFC /* ServerProfile.swift */; };
+		29CDD9C964ACB6E0E5B72EB6 /* HermesRPCClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2B34713BA54740F8065070F /* HermesRPCClient.swift */; };
+		39D8329E99AF2ED1ED7B505E /* DSHProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FC0B2FF0C80CC0A34880ABC /* DSHProtocol.swift */; };
+		4173D1F8B05ABD5DE9075491 /* KeychainStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3567D1DCEAD3E566E3C1085 /* KeychainStoreTests.swift */; };
+		4E0EFE98D1E585960B173BB1 /* AppShellViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D64631578FDD274058FEA3D9 /* AppShellViewModel.swift */; };
+		543979320C39BCF26237FB33 /* DSHProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41E8D9228E3CEEFA5AC184ED /* DSHProtocolTests.swift */; };
+		55F8EA342496C21074EB8D94 /* DSHAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC1FF8A7DB4D79915C19A97C /* DSHAPIClient.swift */; };
+		5C972E9E4C961D06C1B61B68 /* AppThemeMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E2F5C39CAF5D1AE44C52F99 /* AppThemeMode.swift */; };
+		619E1E275AF97EF846F3B98F /* HermesAgentGateway.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14C8FF5A576FE337FCD96611 /* HermesAgentGateway.swift */; };
+		6597E8115B1FE367F6C55ECD /* AgentLogoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1ADCB9A18E916D5B4E09F01A /* AgentLogoView.swift */; };
+		6870851D176970E1359F9315 /* ServerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E496CB54DE6431A0D8BBADA /* ServerStore.swift */; };
+		70B99F1BD1DB495F0CAC3CBA /* HermesProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7DE52579AC004626CFE7C93 /* HermesProtocolTests.swift */; };
+		72596BA4E857ED5EE4EB05CE /* DrawerInteractionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E48A374EB8FD16EE088530C5 /* DrawerInteractionUITests.swift */; };
+		770EB8707522C012AF0F7F40 /* ChatSessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 005A0C46539ED973AF34F1A9 /* ChatSessionViewModel.swift */; };
+		7AA2DC1C103016C484C2AAEE /* ConversationMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = C090120DDB0350AB7C234030 /* ConversationMessage.swift */; };
+		7AA61137F188C98A9D28666A /* ServerListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC139F5CB8CC5BA2F8846314 /* ServerListView.swift */; };
+		7C64CD24A3621E4386328F94 /* AgentModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18F6A6F24B400F04531854E1 /* AgentModels.swift */; };
+		7DB749879951BF60AB67165C /* ChatSessionViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD2C1174D777776B17E5C4DE /* ChatSessionViewModelTests.swift */; };
+		7FC3203D4BDD8EB7F2E8261C /* ServerStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4026497109BC58E5E45C4FB /* ServerStoreTests.swift */; };
+		8115FC1F77D5F7DEBABE8F33 /* AgentPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D53B260DE305F6E593E51B9 /* AgentPresentationTests.swift */; };
+		91C3F07BD94BF2D6FADA016A /* DSHUIView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D3C596B17CEEFCAC2E38F9D /* DSHUIView.swift */; };
+		9AE64858A6D4078C6E07CAB9 /* ServerEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A856823BEB13D51E4BCF0372 /* ServerEditorView.swift */; };
+		A3EA77063C9D9AEF57549527 /* DSHAgentGateway.swift in Sources */ = {isa = PBXBuildFile; fileRef = 510655F0FC73CB1DD3722AC0 /* DSHAgentGateway.swift */; };
+		A9D84291CD5AAA271E0EE784 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = F54D85191A99E0C4955EC6B4 /* PrivacyInfo.xcprivacy */; };
+		B3F98F3039A5E3B9D261CB23 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 954EDDA2CA845A22B23D95A9 /* Assets.xcassets */; };
+		B5BCFE7294E96F2D1A4868D7 /* HermesNativeAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = E947F2967B77A4CEEF758530 /* HermesNativeAuth.swift */; };
+		C66BE4117994F0352C04E5FA /* AppShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC891C3FA02242720F7CF772 /* AppShellView.swift */; };
+		D017102252482EBE6160425B /* ChatSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C53441ABF56517F86A81B720 /* ChatSessionView.swift */; };
+		D3FA760CFEADA2A4DFABC144 /* DSHIOSAppApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03C50206CA9BF7A26D9AB667 /* DSHIOSAppApp.swift */; };
+		DEFD1054A8916CF8B6F9B2D2 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D1D235C6C4D0664C3F47D01 /* KeychainStore.swift */; };
+		F4782076528A01DAD07048C2 /* ServerProfileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E5EFF1CA6C7C462C5F3270E /* ServerProfileTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		13E0F49066D41D10CCAA1FFF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3DC2B72503576D378F936BBD /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FB6C977955F416D5C84FF5BB;
+			remoteInfo = DSHIOSApp;
+		};
+		59ECF1A1980CEF73210EEBFF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3DC2B72503576D378F936BBD /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FB6C977955F416D5C84FF5BB;
+			remoteInfo = DSHIOSApp;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		005A0C46539ED973AF34F1A9 /* ChatSessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatSessionViewModel.swift; sourceTree = "<group>"; };
+		03C50206CA9BF7A26D9AB667 /* DSHIOSAppApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DSHIOSAppApp.swift; sourceTree = "<group>"; };
+		078CD723F432C48D027D5BFC /* ServerProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerProfile.swift; sourceTree = "<group>"; };
+		0E496CB54DE6431A0D8BBADA /* ServerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerStore.swift; sourceTree = "<group>"; };
+		14C8FF5A576FE337FCD96611 /* HermesAgentGateway.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HermesAgentGateway.swift; sourceTree = "<group>"; };
+		18F6A6F24B400F04531854E1 /* AgentModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentModels.swift; sourceTree = "<group>"; };
+		1ADCB9A18E916D5B4E09F01A /* AgentLogoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLogoView.swift; sourceTree = "<group>"; };
+		37DCC07F7663940E44AEDD0C /* AgentGatewayFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentGatewayFactory.swift; sourceTree = "<group>"; };
+		3D3C596B17CEEFCAC2E38F9D /* DSHUIView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DSHUIView.swift; sourceTree = "<group>"; };
+		3E5EFF1CA6C7C462C5F3270E /* ServerProfileTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerProfileTests.swift; sourceTree = "<group>"; };
+		41E8D9228E3CEEFA5AC184ED /* DSHProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DSHProtocolTests.swift; sourceTree = "<group>"; };
+		4D1D235C6C4D0664C3F47D01 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
+		510655F0FC73CB1DD3722AC0 /* DSHAgentGateway.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DSHAgentGateway.swift; sourceTree = "<group>"; };
+		5FC0B2FF0C80CC0A34880ABC /* DSHProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DSHProtocol.swift; sourceTree = "<group>"; };
+		6D53B260DE305F6E593E51B9 /* AgentPresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentPresentationTests.swift; sourceTree = "<group>"; };
+		7F11252D91D03B1C15FE2C3A /* DSHIOSAppTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = DSHIOSAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		88570BB995AC2745DB8C60F5 /* DSHIOSAppUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = DSHIOSAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		954EDDA2CA845A22B23D95A9 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		9E2F5C39CAF5D1AE44C52F99 /* AppThemeMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppThemeMode.swift; sourceTree = "<group>"; };
+		A0204DE753F22B7DA83D0D09 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		A7DE52579AC004626CFE7C93 /* HermesProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HermesProtocolTests.swift; sourceTree = "<group>"; };
+		A856823BEB13D51E4BCF0372 /* ServerEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerEditorView.swift; sourceTree = "<group>"; };
+		C090120DDB0350AB7C234030 /* ConversationMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationMessage.swift; sourceTree = "<group>"; };
+		C53441ABF56517F86A81B720 /* ChatSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatSessionView.swift; sourceTree = "<group>"; };
+		CD2C1174D777776B17E5C4DE /* ChatSessionViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatSessionViewModelTests.swift; sourceTree = "<group>"; };
+		D2B34713BA54740F8065070F /* HermesRPCClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HermesRPCClient.swift; sourceTree = "<group>"; };
+		D2C14C8C03957BA9BAED326E /* DSHIOSApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = DSHIOSApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D3567D1DCEAD3E566E3C1085 /* KeychainStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStoreTests.swift; sourceTree = "<group>"; };
+		D64631578FDD274058FEA3D9 /* AppShellViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShellViewModel.swift; sourceTree = "<group>"; };
+		DC139F5CB8CC5BA2F8846314 /* ServerListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerListView.swift; sourceTree = "<group>"; };
+		DC1FF8A7DB4D79915C19A97C /* DSHAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DSHAPIClient.swift; sourceTree = "<group>"; };
+		E48A374EB8FD16EE088530C5 /* DrawerInteractionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawerInteractionUITests.swift; sourceTree = "<group>"; };
+		E947F2967B77A4CEEF758530 /* HermesNativeAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HermesNativeAuth.swift; sourceTree = "<group>"; };
+		F4026497109BC58E5E45C4FB /* ServerStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerStoreTests.swift; sourceTree = "<group>"; };
+		F54D85191A99E0C4955EC6B4 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		F610C8B9ABF35500CF6D1C7F /* DSHUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DSHUI.swift; sourceTree = "<group>"; };
+		FC891C3FA02242720F7CF772 /* AppShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShellView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		2FF5CB72CFCB3C92B3A69B50 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				03C50206CA9BF7A26D9AB667 /* DSHIOSAppApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		4D0B6FB02131B694166D6C2E /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				37DCC07F7663940E44AEDD0C /* AgentGatewayFactory.swift */,
+				510655F0FC73CB1DD3722AC0 /* DSHAgentGateway.swift */,
+				DC1FF8A7DB4D79915C19A97C /* DSHAPIClient.swift */,
+				14C8FF5A576FE337FCD96611 /* HermesAgentGateway.swift */,
+				E947F2967B77A4CEEF758530 /* HermesNativeAuth.swift */,
+				D2B34713BA54740F8065070F /* HermesRPCClient.swift */,
+				4D1D235C6C4D0664C3F47D01 /* KeychainStore.swift */,
+				0E496CB54DE6431A0D8BBADA /* ServerStore.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		5EA49A90CD274C2DD45CB851 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				18F6A6F24B400F04531854E1 /* AgentModels.swift */,
+				9E2F5C39CAF5D1AE44C52F99 /* AppThemeMode.swift */,
+				C090120DDB0350AB7C234030 /* ConversationMessage.swift */,
+				5FC0B2FF0C80CC0A34880ABC /* DSHProtocol.swift */,
+				F610C8B9ABF35500CF6D1C7F /* DSHUI.swift */,
+				078CD723F432C48D027D5BFC /* ServerProfile.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		79A66DC995EE6B60B4D48A70 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				D2C14C8C03957BA9BAED326E /* DSHIOSApp.app */,
+				7F11252D91D03B1C15FE2C3A /* DSHIOSAppTests.xctest */,
+				88570BB995AC2745DB8C60F5 /* DSHIOSAppUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		85584F75F753F9A0A2801A97 = {
+			isa = PBXGroup;
+			children = (
+				88068D6E4F3FE881D80974AA /* DSHIOSApp */,
+				89EDA1566419071A3F560653 /* DSHIOSAppTests */,
+				C901757953C6768778F1730C /* DSHIOSAppUITests */,
+				79A66DC995EE6B60B4D48A70 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		88068D6E4F3FE881D80974AA /* DSHIOSApp */ = {
+			isa = PBXGroup;
+			children = (
+				954EDDA2CA845A22B23D95A9 /* Assets.xcassets */,
+				A0204DE753F22B7DA83D0D09 /* Info.plist */,
+				F54D85191A99E0C4955EC6B4 /* PrivacyInfo.xcprivacy */,
+				2FF5CB72CFCB3C92B3A69B50 /* App */,
+				5EA49A90CD274C2DD45CB851 /* Models */,
+				4D0B6FB02131B694166D6C2E /* Services */,
+				F307BB4E780B2446059DFAFD /* ViewModels */,
+				A4815FA8B69D75BEFE58ED3B /* Views */,
+			);
+			path = DSHIOSApp;
+			sourceTree = "<group>";
+		};
+		89EDA1566419071A3F560653 /* DSHIOSAppTests */ = {
+			isa = PBXGroup;
+			children = (
+				6D53B260DE305F6E593E51B9 /* AgentPresentationTests.swift */,
+				CD2C1174D777776B17E5C4DE /* ChatSessionViewModelTests.swift */,
+				41E8D9228E3CEEFA5AC184ED /* DSHProtocolTests.swift */,
+				A7DE52579AC004626CFE7C93 /* HermesProtocolTests.swift */,
+				D3567D1DCEAD3E566E3C1085 /* KeychainStoreTests.swift */,
+				3E5EFF1CA6C7C462C5F3270E /* ServerProfileTests.swift */,
+				F4026497109BC58E5E45C4FB /* ServerStoreTests.swift */,
+			);
+			path = DSHIOSAppTests;
+			sourceTree = "<group>";
+		};
+		A4815FA8B69D75BEFE58ED3B /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				1ADCB9A18E916D5B4E09F01A /* AgentLogoView.swift */,
+				FC891C3FA02242720F7CF772 /* AppShellView.swift */,
+				C53441ABF56517F86A81B720 /* ChatSessionView.swift */,
+				3D3C596B17CEEFCAC2E38F9D /* DSHUIView.swift */,
+				A856823BEB13D51E4BCF0372 /* ServerEditorView.swift */,
+				DC139F5CB8CC5BA2F8846314 /* ServerListView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		C901757953C6768778F1730C /* DSHIOSAppUITests */ = {
+			isa = PBXGroup;
+			children = (
+				E48A374EB8FD16EE088530C5 /* DrawerInteractionUITests.swift */,
+			);
+			path = DSHIOSAppUITests;
+			sourceTree = "<group>";
+		};
+		F307BB4E780B2446059DFAFD /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				D64631578FDD274058FEA3D9 /* AppShellViewModel.swift */,
+				005A0C46539ED973AF34F1A9 /* ChatSessionViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		6493F08E928F9D7FD2E48E8B /* DSHIOSAppTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2EBD7C10AE3A8B28C8589B4C /* Build configuration list for PBXNativeTarget "DSHIOSAppTests" */;
+			buildPhases = (
+				5DDE5F6B1AE385AD240B2AA3 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				9BD628C74B2CCF9F211DE076 /* PBXTargetDependency */,
+			);
+			name = DSHIOSAppTests;
+			packageProductDependencies = (
+			);
+			productName = DSHIOSAppTests;
+			productReference = 7F11252D91D03B1C15FE2C3A /* DSHIOSAppTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		7F7BCBA89CB2A88F3A0E8F31 /* DSHIOSAppUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = EE740FDF32DDFE90235D6546 /* Build configuration list for PBXNativeTarget "DSHIOSAppUITests" */;
+			buildPhases = (
+				335B6A9D498396F59D70C5BB /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				DF430CA9154E6DA3AABC238E /* PBXTargetDependency */,
+			);
+			name = DSHIOSAppUITests;
+			packageProductDependencies = (
+			);
+			productName = DSHIOSAppUITests;
+			productReference = 88570BB995AC2745DB8C60F5 /* DSHIOSAppUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		FB6C977955F416D5C84FF5BB /* DSHIOSApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6F59ED6D3E37A6885EBFF365 /* Build configuration list for PBXNativeTarget "DSHIOSApp" */;
+			buildPhases = (
+				1FB08332F256F6A82D28EA11 /* Sources */,
+				9C31A98A54BC3F879DBB00B1 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = DSHIOSApp;
+			packageProductDependencies = (
+			);
+			productName = DSHIOSApp;
+			productReference = D2C14C8C03957BA9BAED326E /* DSHIOSApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		3DC2B72503576D378F936BBD /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					7F7BCBA89CB2A88F3A0E8F31 = {
+						TestTargetID = FB6C977955F416D5C84FF5BB;
+					};
+					FB6C977955F416D5C84FF5BB = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 53C967DC92D2A513D7F5D839 /* Build configuration list for PBXProject "DSHIOSApp" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 85584F75F753F9A0A2801A97;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 79A66DC995EE6B60B4D48A70 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				FB6C977955F416D5C84FF5BB /* DSHIOSApp */,
+				6493F08E928F9D7FD2E48E8B /* DSHIOSAppTests */,
+				7F7BCBA89CB2A88F3A0E8F31 /* DSHIOSAppUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		9C31A98A54BC3F879DBB00B1 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B3F98F3039A5E3B9D261CB23 /* Assets.xcassets in Resources */,
+				A9D84291CD5AAA271E0EE784 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		1FB08332F256F6A82D28EA11 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				126FEE1A63FE62C73A1940FD /* AgentGatewayFactory.swift in Sources */,
+				6597E8115B1FE367F6C55ECD /* AgentLogoView.swift in Sources */,
+				7C64CD24A3621E4386328F94 /* AgentModels.swift in Sources */,
+				C66BE4117994F0352C04E5FA /* AppShellView.swift in Sources */,
+				4E0EFE98D1E585960B173BB1 /* AppShellViewModel.swift in Sources */,
+				5C972E9E4C961D06C1B61B68 /* AppThemeMode.swift in Sources */,
+				D017102252482EBE6160425B /* ChatSessionView.swift in Sources */,
+				770EB8707522C012AF0F7F40 /* ChatSessionViewModel.swift in Sources */,
+				7AA2DC1C103016C484C2AAEE /* ConversationMessage.swift in Sources */,
+				55F8EA342496C21074EB8D94 /* DSHAPIClient.swift in Sources */,
+				A3EA77063C9D9AEF57549527 /* DSHAgentGateway.swift in Sources */,
+				D3FA760CFEADA2A4DFABC144 /* DSHIOSAppApp.swift in Sources */,
+				39D8329E99AF2ED1ED7B505E /* DSHProtocol.swift in Sources */,
+				1648E5841353888D82FE92A4 /* DSHUI.swift in Sources */,
+				91C3F07BD94BF2D6FADA016A /* DSHUIView.swift in Sources */,
+				619E1E275AF97EF846F3B98F /* HermesAgentGateway.swift in Sources */,
+				B5BCFE7294E96F2D1A4868D7 /* HermesNativeAuth.swift in Sources */,
+				29CDD9C964ACB6E0E5B72EB6 /* HermesRPCClient.swift in Sources */,
+				DEFD1054A8916CF8B6F9B2D2 /* KeychainStore.swift in Sources */,
+				9AE64858A6D4078C6E07CAB9 /* ServerEditorView.swift in Sources */,
+				7AA61137F188C98A9D28666A /* ServerListView.swift in Sources */,
+				1A9C871D62CAB45074A23DB6 /* ServerProfile.swift in Sources */,
+				6870851D176970E1359F9315 /* ServerStore.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		335B6A9D498396F59D70C5BB /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				72596BA4E857ED5EE4EB05CE /* DrawerInteractionUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5DDE5F6B1AE385AD240B2AA3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8115FC1F77D5F7DEBABE8F33 /* AgentPresentationTests.swift in Sources */,
+				7DB749879951BF60AB67165C /* ChatSessionViewModelTests.swift in Sources */,
+				543979320C39BCF26237FB33 /* DSHProtocolTests.swift in Sources */,
+				70B99F1BD1DB495F0CAC3CBA /* HermesProtocolTests.swift in Sources */,
+				4173D1F8B05ABD5DE9075491 /* KeychainStoreTests.swift in Sources */,
+				F4782076528A01DAD07048C2 /* ServerProfileTests.swift in Sources */,
+				7FC3203D4BDD8EB7F2E8261C /* ServerStoreTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		9BD628C74B2CCF9F211DE076 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FB6C977955F416D5C84FF5BB /* DSHIOSApp */;
+			targetProxy = 59ECF1A1980CEF73210EEBFF /* PBXContainerItemProxy */;
+		};
+		DF430CA9154E6DA3AABC238E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FB6C977955F416D5C84FF5BB /* DSHIOSApp */;
+			targetProxy = 13E0F49066D41D10CCAA1FFF /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		162337B79D2630E9F540B370 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = DSHIOSApp/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.dsh.mobile.client;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		16B60B281DA3FBCB22AD4C54 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "app.dsh.mobile.client.ui-tests";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = DSHIOSApp;
+			};
+			name = Release;
+		};
+		618A36393C945B57D9A7AC4C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		658F1EF4A65B1F63EF993BE0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "app.dsh.mobile.client.ui-tests";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = DSHIOSApp;
+			};
+			name = Debug;
+		};
+		86BFF3761E6F3C331760A9BA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.dsh.mobile.client.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DSHIOSApp.app/DSHIOSApp";
+			};
+			name = Release;
+		};
+		99CE2B5A5BC44EB5F3447DC1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = DSHIOSApp/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.dsh.mobile.client;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		D8B0D378317B6AD76DFAFB6F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.dsh.mobile.client.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DSHIOSApp.app/DSHIOSApp";
+			};
+			name = Debug;
+		};
+		F0A4BAD056F0338FC4972035 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		2EBD7C10AE3A8B28C8589B4C /* Build configuration list for PBXNativeTarget "DSHIOSAppTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D8B0D378317B6AD76DFAFB6F /* Debug */,
+				86BFF3761E6F3C331760A9BA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		53C967DC92D2A513D7F5D839 /* Build configuration list for PBXProject "DSHIOSApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				618A36393C945B57D9A7AC4C /* Debug */,
+				F0A4BAD056F0338FC4972035 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		6F59ED6D3E37A6885EBFF365 /* Build configuration list for PBXNativeTarget "DSHIOSApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				99CE2B5A5BC44EB5F3447DC1 /* Debug */,
+				162337B79D2630E9F540B370 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		EE740FDF32DDFE90235D6546 /* Build configuration list for PBXNativeTarget "DSHIOSAppUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				658F1EF4A65B1F63EF993BE0 /* Debug */,
+				16B60B281DA3FBCB22AD4C54 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 3DC2B72503576D378F936BBD /* Project object */;
+}

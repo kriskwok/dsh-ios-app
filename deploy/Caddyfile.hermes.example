@@ -1,0 +1,9 @@
+# HERMES_PUBLIC_ADDRESS can be hermes.example.com or hermes.example.com:8443.
+# Port 9120 must remain blocked from external networks; Caddy is the only
+# public entry point and automatically proxies WebSocket upgrades.
+https://{$HERMES_PUBLIC_ADDRESS} {
+	encode zstd gzip
+	@legacyPasswordLogin path /auth/password-login
+	respond @legacyPasswordLogin 404
+	reverse_proxy 127.0.0.1:9120
+}
