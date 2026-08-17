@@ -278,6 +278,4 @@ final class DSHAgentGateway: AgentGateway, @unchecked Sendable {
     }
 }
 
-private extension String {
-    var nilIfEmpty: String? { isEmpty ? nil : self }
-}
+

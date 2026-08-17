@@ -245,6 +245,4 @@ struct DSHWorkspaceList: Sendable {
     }
 }
 
-private extension String {
-    var nilIfEmpty: String? { isEmpty ? nil : self }
-}
+
