@@ -2,4 +2,11 @@ DerivedData/
 build/
 *.xcuserstate
 xcuserdata/
-
+.DS_Store
+.trae-html-share-packages/
+*.env
+.env*
+*.pem
+*.p12
+*.key
+credentials*
