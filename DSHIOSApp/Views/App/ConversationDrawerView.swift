@@ -149,10 +149,10 @@ struct ConversationDrawerView: View {
     private var channelSections: [AgentSessionChannel] {
         let grouped = Dictionary(grouping: visibleSessions, by: \.channel)
         return grouped.keys.sorted { lhs, rhs in
+            if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
             let lhsDate = AgentSessionOrdering.latestUpdate(in: grouped[lhs] ?? []) ?? .distantPast
             let rhsDate = AgentSessionOrdering.latestUpdate(in: grouped[rhs] ?? []) ?? .distantPast
             if lhsDate != rhsDate { return lhsDate > rhsDate }
-            if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
             return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
         }
     }

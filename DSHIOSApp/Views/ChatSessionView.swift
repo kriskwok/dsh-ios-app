@@ -87,6 +87,7 @@ struct ChatSessionView: View {
                     .padding(.vertical, 18)
                 }
                 .coordinateSpace(name: "chat-scroll")
+                .scrollDisabled(isDrawerGestureActive)
                 .scrollDismissesKeyboard(.interactively)
                 .onTapGesture { composerFocused = false }
                 .onPreferenceChange(ChatScrollBottomPreferenceKey.self) { bottomY in
@@ -127,6 +128,14 @@ struct ChatSessionView: View {
                             try? await Task.sleep(for: .milliseconds(150))
                             scheduleScrollToLatest(using: proxy, force: true)
                         }
+                    }
+                }
+                .onChange(of: isDrawerGestureActive) { _, active in
+                    guard active, isFollowingLatest else { return }
+                    Task { @MainActor in
+                        await Task.yield()
+                        await Task.yield()
+                        proxy.scrollTo("conversation-bottom", anchor: .bottom)
                     }
                 }
                 .overlay(alignment: .bottomTrailing) {
