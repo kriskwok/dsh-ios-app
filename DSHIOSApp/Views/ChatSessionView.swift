@@ -87,10 +87,10 @@ struct ChatSessionView: View {
                     .padding(.vertical, 18)
                 }
                 .coordinateSpace(name: "chat-scroll")
-                .scrollDisabled(isDrawerGestureActive)
                 .scrollDismissesKeyboard(.interactively)
                 .onTapGesture { composerFocused = false }
                 .onPreferenceChange(ChatScrollBottomPreferenceKey.self) { bottomY in
+                    guard !isDrawerGestureActive else { return }
                     let nearBottom = bottomY <= container.size.height + 72
                     if nearBottom != isFollowingLatest {
                         isFollowingLatest = nearBottom
@@ -171,7 +171,7 @@ struct ChatSessionView: View {
     }
 
     private func scheduleScrollToLatest(using proxy: ScrollViewProxy, force: Bool = false) {
-        guard force || isFollowingLatest else { return }
+        guard force || (isFollowingLatest && !isDrawerGestureActive) else { return }
         Task { @MainActor in
             await Task.yield()
             await Task.yield()

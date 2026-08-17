@@ -166,21 +166,42 @@ struct ConversationDrawerView: View {
 
     @ViewBuilder
     private func channelSection(_ channel: AgentSessionChannel) -> some View {
-        DisclosureGroup(isExpanded: channelExpansionBinding(for: channel.id)) {
-            ForEach(orderedWorkspaces(for: channel)) { workspace in
-                workspaceSection(workspace, channel: channel)
+        let isExpanded = !collapsedChannelIDs.contains(channel.id)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(isExpanded ? 0 : -90))
+                Image(systemName: channel.systemImage)
+                    .font(.subheadline.weight(.semibold))
+                Text(channel.title)
+                    .font(.subheadline.weight(.semibold))
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 5)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.snappy(duration: 0.2)) {
+                    if isExpanded {
+                        collapsedChannelIDs.insert(channel.id)
+                    } else {
+                        collapsedChannelIDs.remove(channel.id)
+                    }
+                }
             }
 
-            ForEach(ungroupedSessions.filter { $0.channel == channel }.sorted(by: AgentSessionOrdering.newestFirst)) { session in
-                drawerSessionRow(session, workspaceID: nil)
+            if isExpanded {
+                ForEach(orderedWorkspaces(for: channel)) { workspace in
+                    workspaceSection(workspace, channel: channel)
+                }
+
+                ForEach(ungroupedSessions.filter { $0.channel == channel }.sorted(by: AgentSessionOrdering.newestFirst)) { session in
+                    drawerSessionRow(session, workspaceID: nil)
+                }
             }
-        } label: {
-            Label(channel.title, systemImage: channel.systemImage)
-                .font(.subheadline.weight(.semibold))
         }
-        .tint(.primary)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 5)
     }
 
     @ViewBuilder
@@ -345,16 +366,4 @@ struct ConversationDrawerView: View {
         .buttonStyle(.plain)
     }
 
-    private func channelExpansionBinding(for channelID: String) -> Binding<Bool> {
-        Binding(
-            get: { !collapsedChannelIDs.contains(channelID) },
-            set: { expanded in
-                if expanded {
-                    collapsedChannelIDs.remove(channelID)
-                } else {
-                    collapsedChannelIDs.insert(channelID)
-                }
-            }
-        )
-    }
 }
