@@ -196,6 +196,9 @@ struct ConversationDrawerView: View {
         let isExpanded = !collapsedWorkspaceIDs.contains(workspace.id)
         return VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
+                Image(systemName: "folder.fill")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                 Text(workspace.title)
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
@@ -309,8 +312,7 @@ struct ConversationDrawerView: View {
                     ProgressView().controlSize(.mini)
                 }
             }
-            .padding(.leading, workspaceID == nil ? 16 : 24)
-            .padding(.trailing, 10)
+            .padding(.horizontal, 16)
             .padding(.vertical, 8)
             .background(
                 selectedSessionID == session.id ? Color.accentColor.opacity(0.12) : Color.clear,

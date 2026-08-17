@@ -114,11 +114,19 @@ struct ChatSessionView: View {
                     scheduleScrollToLatest(using: proxy)
                 }
                 .onChange(of: composerFocused) { _, focused in
-                    guard focused, isFollowingLatest else { return }
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(220))
-                        guard composerFocused else { return }
-                        scheduleScrollToLatest(using: proxy, force: true)
+                    if focused {
+                        guard isFollowingLatest else { return }
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(220))
+                            guard composerFocused else { return }
+                            scheduleScrollToLatest(using: proxy, force: true)
+                        }
+                    } else {
+                        guard isFollowingLatest else { return }
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(150))
+                            scheduleScrollToLatest(using: proxy, force: true)
+                        }
                     }
                 }
                 .overlay(alignment: .bottomTrailing) {
