@@ -52,6 +52,8 @@
 		ED675C48CB0282CC26550F28 /* DSHUIHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39FA17ADC2882DEBF03D43A1 /* DSHUIHelpers.swift */; };
 		F4782076528A01DAD07048C2 /* ServerProfileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E5EFF1CA6C7C462C5F3270E /* ServerProfileTests.swift */; };
 		FB0A445F545D2CC4B2D81B0E /* ConversationDrawerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B7A18F7FFB871834DFE16A0 /* ConversationDrawerView.swift */; };
+		9319D40F4192CC61E325467C /* AgentModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF49AB8868082C64498761F7 /* AgentModel.swift */; };
+		67BEBC1448AC5A873956E87D /* ModelSelectorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 771D46DE54B1DB653550DD6D /* ModelSelectorSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -121,6 +123,8 @@
 		F54D85191A99E0C4955EC6B4 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		F610C8B9ABF35500CF6D1C7F /* DSHUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DSHUI.swift; sourceTree = "<group>"; };
 		FC891C3FA02242720F7CF772 /* AppShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShellView.swift; sourceTree = "<group>"; };
+		DF49AB8868082C64498761F7 /* AgentModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentModel.swift; sourceTree = "<group>"; };
+		771D46DE54B1DB653550DD6D /* ModelSelectorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelSelectorSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -162,6 +166,7 @@
 			isa = PBXGroup;
 			children = (
 				18F6A6F24B400F04531854E1 /* AgentModels.swift */,
+				DF49AB8868082C64498761F7 /* AgentModel.swift */,
 				9E2F5C39CAF5D1AE44C52F99 /* AppThemeMode.swift */,
 				C090120DDB0350AB7C234030 /* ConversationMessage.swift */,
 				5FC0B2FF0C80CC0A34880ABC /* DSHProtocol.swift */,
@@ -228,6 +233,7 @@
 				FC891C3FA02242720F7CF772 /* AppShellView.swift */,
 				C53441ABF56517F86A81B720 /* ChatSessionView.swift */,
 				3D3C596B17CEEFCAC2E38F9D /* DSHUIView.swift */,
+				771D46DE54B1DB653550DD6D /* ModelSelectorSheet.swift */,
 				A856823BEB13D51E4BCF0372 /* ServerEditorView.swift */,
 				DC139F5CB8CC5BA2F8846314 /* ServerListView.swift */,
 				D363B975FC0DDD446E996780 /* App */,
@@ -406,6 +412,8 @@
 				D017102252482EBE6160425B /* ChatSessionView.swift in Sources */,
 				770EB8707522C012AF0F7F40 /* ChatSessionViewModel.swift in Sources */,
 				FB0A445F545D2CC4B2D81B0E /* ConversationDrawerView.swift in Sources */,
+				9319D40F4192CC61E325467C /* AgentModel.swift in Sources */,
+				67BEBC1448AC5A873956E87D /* ModelSelectorSheet.swift in Sources */,
 				7AA2DC1C103016C484C2AAEE /* ConversationMessage.swift in Sources */,
 				55F8EA342496C21074EB8D94 /* DSHAPIClient.swift in Sources */,
 				A3EA77063C9D9AEF57549527 /* DSHAgentGateway.swift in Sources */,
@@ -477,6 +485,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = K9GJS8JXMH;
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = DSHIOSApp/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -612,6 +621,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = K9GJS8JXMH;
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = DSHIOSApp/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (

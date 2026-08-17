@@ -13,6 +13,7 @@ struct ChatSessionView: View {
     @FocusState private var composerFocused: Bool
     @State private var isFollowingLatest = true
     @State private var hasPerformedInitialScroll = false
+    @State private var showModelSelector = false
     private let workspaceTitle: String?
     private let onOpenDrawer: () -> Void
     private let onNewConversation: () -> Void
@@ -169,6 +170,24 @@ struct ChatSessionView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
+        .overlay(alignment: .bottom) {
+            if showModelSelector && viewModel.canSelectModel {
+                ZStack(alignment: .bottomTrailing) {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showModelSelector = false
+                            }
+                        }
+
+                    ModelSelectorPopover(viewModel: viewModel, isPresented: $showModelSelector)
+                        .padding(.trailing, 12)
+                        .padding(.bottom, 60)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
+            }
+        }
         .task { viewModel.start() }
         .onChange(of: viewModel.isConnected) { _, connected in
             onConnectionChanged(connected, viewModel.isReconnecting)
@@ -244,62 +263,114 @@ struct ChatSessionView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private var composer: some View {
-        VStack(spacing: 8) {
-            HStack(alignment: .bottom, spacing: 10) {
-                TextField("给 \(viewModel.agentName) 发消息", text: $viewModel.composerText, axis: .vertical)
-                    .lineLimit(1...6)
-                    .focused($composerFocused)
-                    .padding(.leading, 15)
-                    .padding(.vertical, 11)
-
-                if viewModel.isRunning {
-                    Button { Task { await viewModel.cancel() } } label: {
-                        ZStack {
-                            Circle().fill(Color.primary)
-                            if viewModel.isStopping {
-                                ProgressView().tint(Color(uiColor: .systemBackground))
-                            } else {
-                                Image(systemName: "stop.fill")
-                                    .font(.system(size: 11, weight: .bold))
-                                    .foregroundStyle(Color(uiColor: .systemBackground))
-                            }
-                        }
-                        .frame(width: 36, height: 36)
-                    }
-                    .disabled(viewModel.isStopping)
-                    .accessibilityLabel("停止生成")
-                    .padding(.trailing, 5)
-                    .padding(.bottom, 4)
-                } else {
-                    Button { Task { await viewModel.send() } } label: {
-                        ZStack {
-                            Circle().fill(canSend ? Color.accentColor : Color.secondary.opacity(0.25))
-                            Image(systemName: "arrow.up")
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundStyle(.white)
-                        }
-                        .frame(width: 36, height: 36)
-                    }
-                    .disabled(!canSend)
-                    .accessibilityLabel("发送")
-                    .padding(.trailing, 5)
-                    .padding(.bottom, 4)
-                }
+    private var modelSelectorButton: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showModelSelector.toggle()
             }
-            .background(Color(uiColor: .secondarySystemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        } label: {
+            HStack(spacing: 4) {
+                if viewModel.isModelLoading {
+                    ProgressView()
+                        .scaleEffect(0.65)
+                        .frame(width: 12, height: 12)
+                } else if let name = viewModel.currentModelDisplayName {
+                    Text(name)
+                        .lineLimit(1)
+                    if !viewModel.isCurrentModelAvailable {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.orange)
+                    }
+                } else {
+                    Text("选择模型")
+                        .foregroundStyle(.secondary)
+                }
+                Image(systemName: showModelSelector ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(showModelSelector ? Color.accentColor.opacity(0.1) : Color.clear, in: Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var sendButton: some View {
+        Group {
+            if viewModel.isRunning {
+                Button { Task { await viewModel.cancel() } } label: {
+                    ZStack {
+                        Circle().fill(Color.primary)
+                        if viewModel.isStopping {
+                            ProgressView().tint(Color(uiColor: .systemBackground))
+                        } else {
+                            Image(systemName: "stop.fill")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(Color(uiColor: .systemBackground))
+                        }
+                    }
+                    .frame(width: 34, height: 34)
+                }
+                .disabled(viewModel.isStopping)
+                .accessibilityLabel("停止生成")
+            } else {
+                Button { Task { await viewModel.send() } } label: {
+                    ZStack {
+                        Circle().fill(canSend ? Color.accentColor : Color.secondary.opacity(0.25))
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                    .frame(width: 34, height: 34)
+                }
+                .disabled(!canSend)
+                .accessibilityLabel("发送")
+            }
+        }
+    }
+
+    private var composer: some View {
+        VStack(spacing: 0) {
+            TextField("给 \(viewModel.agentName) 发消息", text: $viewModel.composerText, axis: .vertical)
+                .lineLimit(1...6)
+                .focused($composerFocused)
+                .padding(.horizontal, 15)
+                .padding(.top, 12)
+
+            HStack(spacing: 8) {
+                Spacer()
+                if viewModel.canSelectModel {
+                    modelSelectorButton
+                }
+                sendButton
+            }
+            .padding(.horizontal, 8)
+            .padding(.top, 6)
+            .padding(.bottom, 8)
+        }
+        .background(Color(uiColor: .secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background(alignment: .bottom) {
             if viewModel.isRunning {
                 Text("\(viewModel.agentName) 正在处理；如需发送下一条，请先停止当前生成。")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
+                    .offset(y: 22)
             }
         }
         .padding(.horizontal, 12)
         .padding(.top, 4)
-        .padding(.bottom, 6)
+        .padding(.bottom, viewModel.isRunning ? 24 : 6)
         .background(Color(uiColor: .systemBackground))
+    }
+
+    private var composerWithPopover: some View {
+        composer
     }
 
     @ViewBuilder
@@ -314,7 +385,7 @@ struct ChatSessionView: View {
                 }
             )
         } else {
-            composer
+            composerWithPopover
         }
     }
 

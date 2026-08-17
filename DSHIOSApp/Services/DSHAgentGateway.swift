@@ -140,6 +140,53 @@ final class DSHAgentGateway: AgentGateway, @unchecked Sendable {
 
     func close() {}
 
+    func fetchModels(sessionID: String) async throws -> AgentModelCatalog {
+        let result = try await client.call(
+            method: "session.models",
+            payload: ["sessionId": .string(sessionID)]
+        )
+        let value = result.value
+        let current: AgentModelSelection? = {
+            guard let current = value["current"],
+                  let provider = current["provider"]?.stringValue,
+                  let model = current["model"]?.stringValue else { return nil }
+            return AgentModelSelection(providerID: provider, modelID: model)
+        }()
+        let groups = (value["groups"]?.arrayValue ?? []).compactMap { rawGroup -> AgentModelGroup? in
+            guard let groupID = rawGroup["id"]?.stringValue else { return nil }
+            let groupName = rawGroup["name"]?.stringValue ?? groupID
+            let isOfficial = rawGroup["official"]?.boolValue ?? false
+            let models = (rawGroup["models"]?.arrayValue ?? []).compactMap { rawModel -> AgentModel? in
+                guard let modelID = rawModel["id"]?.stringValue else { return nil }
+                return AgentModel(
+                    id: modelID,
+                    name: rawModel["name"]?.stringValue ?? modelID,
+                    providerID: groupID,
+                    providerName: groupName,
+                    isOfficial: isOfficial,
+                    description: rawModel["description"]?.stringValue?.nilIfEmpty
+                )
+            }
+            return AgentModelGroup(id: groupID, name: groupName, isOfficial: isOfficial, models: models)
+        }
+        return AgentModelCatalog(groups: groups, currentModel: current)
+    }
+
+    func selectModel(_ selection: AgentModelSelection, sessionID: String) async throws -> AgentModelSelection? {
+        let result = try await client.call(
+            method: "session.selectModel",
+            payload: [
+                "sessionId": .string(sessionID),
+                "provider": .string(selection.providerID),
+                "model": .string(selection.modelID)
+            ]
+        )
+        guard let selected = result.value["selected"],
+              let provider = selected["provider"]?.stringValue,
+              let model = selected["model"]?.stringValue else { return nil }
+        return AgentModelSelection(providerID: provider, modelID: model)
+    }
+
     static func mapMux(_ request: DSHServerRequest) throws -> AgentGatewayEvent? {
         switch request.method {
         case "approval/requested":

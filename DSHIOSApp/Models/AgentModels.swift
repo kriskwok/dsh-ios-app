@@ -205,4 +205,6 @@ protocol AgentGateway: AnyObject, Sendable {
     func respond(to approval: AgentApprovalRequest, choice: AgentApprovalChoice) async throws
     func events() -> AsyncThrowingStream<AgentGatewayEvent, Error>
     func close()
+    func fetchModels(sessionID: String) async throws -> AgentModelCatalog
+    func selectModel(_ selection: AgentModelSelection, sessionID: String) async throws -> AgentModelSelection?
 }

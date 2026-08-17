@@ -13,6 +13,9 @@ final class ChatSessionViewModel: ObservableObject {
     @Published private(set) var respondingApprovalID: String?
     @Published var errorMessage: String?
     @Published var title: String
+    @Published private(set) var modelCatalog: AgentModelCatalog?
+    @Published private(set) var isModelLoading = false
+    @Published private(set) var isModelSelecting = false
 
     let agentName: String
     let agentKind: AgentServerKind
@@ -71,6 +74,7 @@ final class ChatSessionViewModel: ObservableObject {
                 if let storedSession {
                     let context = try await gateway.openSession(storedSession)
                     apply(context)
+                    await loadModels()
                 } else {
                     isLoading = false
                 }
@@ -121,6 +125,7 @@ final class ChatSessionViewModel: ObservableObject {
             } else {
                 let context = try await gateway.createSession(in: workspace)
                 apply(context, preservingMessages: true)
+                await loadModels()
                 activeRuntimeID = context.runtimeSessionID
                 storedSession = context.session
                 onSessionCreated(context.session)
@@ -185,6 +190,57 @@ final class ChatSessionViewModel: ObservableObject {
             errorMessage = error.localizedDescription
             respondingApprovalID = nil
         }
+    }
+
+    var canSelectModel: Bool {
+        agentKind == .dsh
+    }
+
+    var currentModelDisplayName: String? {
+        guard canSelectModel else { return nil }
+        guard let catalog = modelCatalog, let selection = catalog.currentModel else { return nil }
+        if let model = catalog.allModels.first(where: { $0.providerID == selection.providerID && $0.id == selection.modelID }) {
+            return model.displayName
+        }
+        return selection.modelID
+    }
+
+    var isCurrentModelAvailable: Bool {
+        guard let catalog = modelCatalog, let selection = catalog.currentModel else { return true }
+        return catalog.isAvailable(selection)
+    }
+
+    func loadModels() async {
+        guard canSelectModel, let sessionID = runtimeSessionID ?? storedSession?.id else { return }
+        guard !isModelLoading else { return }
+        isModelLoading = true
+        do {
+            let catalog = try await gateway.fetchModels(sessionID: sessionID)
+            modelCatalog = catalog
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isModelLoading = false
+    }
+
+    func selectModel(_ model: AgentModel) async {
+        guard canSelectModel, let sessionID = runtimeSessionID ?? storedSession?.id else { return }
+        guard !isModelSelecting else { return }
+        isModelSelecting = true
+        errorMessage = nil
+        let selection = AgentModelSelection(providerID: model.providerID, modelID: model.id)
+        do {
+            let confirmed = try await gateway.selectModel(selection, sessionID: sessionID)
+            if let catalog = modelCatalog {
+                modelCatalog = AgentModelCatalog(
+                    groups: catalog.groups,
+                    currentModel: confirmed ?? selection
+                )
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isModelSelecting = false
     }
 
     private func apply(_ context: AgentConversationContext, preservingMessages: Bool = false) {

@@ -154,6 +154,14 @@ final class HermesAgentGateway: AgentGateway, @unchecked Sendable {
         Task { await client.close() }
     }
 
+    func fetchModels(sessionID: String) async throws -> AgentModelCatalog {
+        AgentModelCatalog(groups: [], currentModel: nil)
+    }
+
+    func selectModel(_ selection: AgentModelSelection, sessionID: String) async throws -> AgentModelSelection? {
+        nil
+    }
+
     static func map(_ event: HermesGatewayEvent) -> [AgentGatewayEvent] {
         guard let sessionID = event.sessionID else {
             return event.type == "error"
