@@ -23,7 +23,6 @@ struct ServerSettingsView: View {
                                     .buttonStyle(.borderedProminent)
                             }
                         }
-                        versionSection
                     }
                 } else {
                     List {
@@ -56,7 +55,6 @@ struct ServerSettingsView: View {
                         } footer: {
                             Text("公网连接必须使用 HTTPS 和身份认证。不要直接暴露 Agent 的内部监听端口。")
                         }
-                        versionSection
                     }
                 }
             }
@@ -75,6 +73,17 @@ struct ServerSettingsView: View {
             .sheet(item: $editorProfile) { profile in
                 ServerEditorView(profile: profile)
             }
+            .safeAreaInset(edge: .bottom) {
+                VStack(spacing: 3) {
+                    Text("dsh-ios-app v\(appVersion)")
+                    Text("github.com/kriskwok/dsh-ios-app")
+                        .font(.caption2)
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 4)
+            }
         }
     }
 
@@ -89,19 +98,6 @@ struct ServerSettingsView: View {
                 }
             }
             .pickerStyle(.segmented)
-        }
-    }
-
-    private var versionSection: some View {
-        Section {
-            VStack(spacing: 3) {
-                Text("dsh-ios-app \(appVersion)")
-                Text("github.com/kriskwok/dsh-ios-app")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-            .frame(maxWidth: .infinity, alignment: .center)
-            .listRowBackground(Color.clear)
         }
     }
 
