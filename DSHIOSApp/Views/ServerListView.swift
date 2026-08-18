@@ -94,22 +94,19 @@ struct ServerSettingsView: View {
 
     private var versionSection: some View {
         Section {
-            HStack {
-                Spacer()
-                Text("DSH \(appVersion)")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                Spacer()
+            VStack(spacing: 3) {
+                Text("dsh-ios-app \(appVersion)")
+                Text("github.com/kriskwok/dsh-ios-app")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
-        } footer: {
-            Text("基于 Claude Code 与 Hermes 协议构建。")
+            .frame(maxWidth: .infinity, alignment: .center)
+            .listRowBackground(Color.clear)
         }
     }
 
     private var appVersion: String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.1"
-        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
-        return "v\(version) (\(build))"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.1"
     }
 }
 
