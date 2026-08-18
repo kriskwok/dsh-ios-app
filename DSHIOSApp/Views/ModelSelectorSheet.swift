@@ -44,6 +44,9 @@ struct ModelSelectorPopover: View {
                     }
                     .padding(.bottom, 8)
                 }
+                if catalog?.shouldShowReasoningLevel == true {
+                    reasoningLevelBar
+                }
             }
         }
         .frame(maxWidth: 300)
@@ -54,6 +57,29 @@ struct ModelSelectorPopover: View {
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
+        }
+    }
+
+    private var currentReasoningLevel: ReasoningLevel {
+        catalog?.currentReasoningLevel ?? currentSelection?.reasoningLevel ?? .high
+    }
+
+    private var reasoningLevelBar: some View {
+        VStack(spacing: 6) {
+            Divider()
+            VStack(alignment: .leading, spacing: 8) {
+                Text("推理强度")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 14)
+                ReasoningSlider(level: currentReasoningLevel) { newLevel in
+                    Task { await viewModel.selectReasoningLevel(newLevel) }
+                }
+                .disabled(viewModel.isModelSelecting)
+                .padding(.horizontal, 14)
+            }
+            .padding(.top, 10)
+            .padding(.bottom, 12)
         }
     }
 
@@ -153,5 +179,91 @@ struct ModelSelectorPopover: View {
         }
         .buttonStyle(.plain)
         .disabled(viewModel.isModelSelecting)
+    }
+}
+
+private struct ReasoningSlider: View {
+    let level: ReasoningLevel
+    let onChange: (ReasoningLevel) -> Void
+
+    @State private var dragOffset: CGFloat?
+
+    private var levels: [ReasoningLevel] { ReasoningLevel.allCases }
+    private var index: Int { levels.firstIndex(of: level) ?? 2 }
+    private var segmentCount: Int { levels.count }
+    private var progress: CGFloat { CGFloat(index) / CGFloat(segmentCount - 1) }
+
+    private var gradient: LinearGradient {
+        switch level {
+        case .off:
+            return LinearGradient(colors: [Color.secondary.opacity(0.3)], startPoint: .leading, endPoint: .trailing)
+        case .low:
+            return LinearGradient(colors: [Color(red: 0.25, green: 0.5, blue: 0.85).opacity(0.6), Color(red: 0.15, green: 0.4, blue: 0.95)], startPoint: .leading, endPoint: .trailing)
+        case .high:
+            return LinearGradient(colors: [Color(red: 0.85, green: 0.45, blue: 0.15).opacity(0.6), Color(red: 0.95, green: 0.55, blue: 0.0)], startPoint: .leading, endPoint: .trailing)
+        case .max:
+            return LinearGradient(colors: [Color(red: 0.55, green: 0.2, blue: 0.85).opacity(0.6), Color(red: 0.65, green: 0.15, blue: 0.95)], startPoint: .leading, endPoint: .trailing)
+        }
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let trackHeight: CGFloat = 22
+            let labelWidth = geo.size.width / CGFloat(segmentCount)
+
+            VStack(spacing: 6) {
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.secondary.opacity(0.15))
+                        .frame(height: trackHeight)
+
+                    Capsule()
+                        .fill(gradient)
+                        .frame(width: max(0, geo.size.width * progress), height: trackHeight)
+
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: trackHeight, height: trackHeight)
+                        .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
+                        .offset(x: max(0, geo.size.width * progress) - trackHeight / 2)
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    dragOffset = value.location.x
+                                    let clamped = min(max(value.location.x / geo.size.width, 0), 1)
+                                    let newIndex = Int(round(clamped * CGFloat(segmentCount - 1)))
+                                    let newLevel = levels[min(newIndex, segmentCount - 1)]
+                                    if newLevel != level {
+                        onChange(newLevel)
+                                    }
+                                }
+                                .onEnded { _ in
+                                    dragOffset = nil
+                                }
+                        )
+                }
+                .frame(height: trackHeight)
+                .frame(maxWidth: .infinity)
+
+                HStack(spacing: 0) {
+                    ForEach(levels, id: \.self) { lvl in
+                        Text(lvl.displayName)
+                            .font(.system(size: 10, weight: lvl == level ? .bold : .medium))
+                            .foregroundStyle(lvl == level ? gradientFrameColor : .secondary)
+                            .frame(width: labelWidth)
+                    }
+                }
+            }
+        }
+        .frame(height: 48)
+    }
+
+    private var gradientFrameColor: Color {
+        switch level {
+        case .off: return .secondary
+        case .low: return Color(red: 0.15, green: 0.4, blue: 0.95)
+        case .high: return Color(red: 0.95, green: 0.55, blue: 0.0)
+        case .max: return Color(red: 0.65, green: 0.15, blue: 0.95)
+        }
     }
 }

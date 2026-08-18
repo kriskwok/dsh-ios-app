@@ -20,6 +20,7 @@ struct ChatSessionView: View {
     private let onNewConversation: () -> Void
     private let onConnectionChanged: (Bool, Bool) -> Void
     private let isDrawerGestureActive: Bool
+    private let onModelSelectorChanged: (Bool) -> Void
 
     init(
         profile: ServerProfile,
@@ -31,13 +32,15 @@ struct ChatSessionView: View {
         onSessionCreated: @escaping @MainActor (AgentSessionSummary) -> Void,
         onPromptAccepted: @escaping @MainActor (String) -> Void,
         isDrawerGestureActive: Bool = false,
-        onConnectionChanged: @escaping (Bool, Bool) -> Void = { _, _ in }
+        onConnectionChanged: @escaping (Bool, Bool) -> Void = { _, _ in },
+        onModelSelectorChanged: @escaping (Bool) -> Void = { _ in }
     ) {
         workspaceTitle = workspace?.title
         self.onOpenDrawer = onOpenDrawer
         self.onNewConversation = onNewConversation
         self.isDrawerGestureActive = isDrawerGestureActive
         self.onConnectionChanged = onConnectionChanged
+        self.onModelSelectorChanged = onModelSelectorChanged
         _viewModel = StateObject(wrappedValue: ChatSessionViewModel(
             profile: profile,
             password: password,
@@ -205,6 +208,9 @@ struct ChatSessionView: View {
         .onChange(of: viewModel.isConnected) { _, connected in
             onConnectionChanged(connected, viewModel.isReconnecting)
         }
+        .onChange(of: showModelSelector) { _, show in
+            onModelSelectorChanged(show)
+        }
         .onChange(of: viewModel.isReconnecting) { _, reconnecting in
             onConnectionChanged(viewModel.isConnected, reconnecting)
         }
@@ -288,7 +294,7 @@ struct ChatSessionView: View {
                         .scaleEffect(0.65)
                         .frame(width: 12, height: 12)
                 } else if let name = viewModel.currentModelDisplayName {
-                    Text(name)
+                    Text(name.count > 20 ? String(name.prefix(18)) + "…" : name)
                         .lineLimit(1)
                     if !viewModel.isCurrentModelAvailable {
                         Image(systemName: "exclamationmark.triangle.fill")

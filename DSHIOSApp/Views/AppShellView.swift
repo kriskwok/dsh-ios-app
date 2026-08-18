@@ -12,6 +12,7 @@ struct AppShellView: View {
     @State private var showsServerSettings = false
     @State private var chatIsConnected = false
     @State private var chatIsReconnecting = false
+    @State private var modelSelectorIsActive = false
 
     var body: some View {
         GeometryReader { geometry in
@@ -60,7 +61,9 @@ struct AppShellView: View {
                 .accessibilityHidden(drawerProgress < 0.01)
             }
             .contentShape(Rectangle())
-            .simultaneousGesture(drawerGesture(width: drawerWidth))
+            .simultaneousGesture(
+                modelSelectorIsActive ? nil : drawerGesture(width: drawerWidth)
+            )
         }
         .sheet(isPresented: $showsServerSettings) {
             ServerSettingsView { profile in
@@ -108,6 +111,9 @@ struct AppShellView: View {
                 onConnectionChanged: { connected, reconnecting in
                     chatIsConnected = connected
                     chatIsReconnecting = reconnecting
+                },
+                onModelSelectorChanged: { active in
+                    modelSelectorIsActive = active
                 }
             )
             .id(target.id)

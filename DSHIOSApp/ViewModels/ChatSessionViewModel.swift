@@ -241,15 +241,45 @@ final class ChatSessionViewModel: ObservableObject {
         guard !isModelSelecting else { return }
         isModelSelecting = true
         errorMessage = nil
-        let selection = AgentModelSelection(providerID: model.providerID, modelID: model.id)
+        let reasoningLevel = model.isDeepSeek ? (modelCatalog?.currentReasoningLevel ?? .high) : nil
+        let selection = AgentModelSelection(providerID: model.providerID, modelID: model.id, reasoningLevel: reasoningLevel)
         do {
             let confirmed = try await gateway.selectModel(selection, sessionID: sessionID)
             if let catalog = modelCatalog {
                 modelCatalog = AgentModelCatalog(
                     groups: catalog.groups,
-                    currentModel: confirmed ?? selection
+                    currentModel: confirmed ?? selection,
+                    currentReasoningLevel: confirmed?.reasoningLevel ?? reasoningLevel
                 )
             }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isModelSelecting = false
+    }
+
+    func selectReasoningLevel(_ level: ReasoningLevel) async {
+        guard canSelectModel, let sessionID = runtimeSessionID ?? storedSession?.id else { return }
+        guard let catalog = modelCatalog, let current = catalog.currentModel else { return }
+        guard !isModelSelecting else { return }
+        isModelSelecting = true
+        errorMessage = nil
+        let selection = AgentModelSelection(
+            providerID: current.providerID,
+            modelID: current.modelID,
+            reasoningLevel: level
+        )
+        do {
+            let confirmed = try await gateway.selectModel(selection, sessionID: sessionID)
+            modelCatalog = AgentModelCatalog(
+                groups: catalog.groups,
+                currentModel: AgentModelSelection(
+                    providerID: current.providerID,
+                    modelID: current.modelID,
+                    reasoningLevel: confirmed?.reasoningLevel ?? level
+                ),
+                currentReasoningLevel: confirmed?.reasoningLevel ?? level
+            )
         } catch {
             errorMessage = error.localizedDescription
         }

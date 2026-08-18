@@ -150,8 +150,11 @@ final class DSHAgentGateway: AgentGateway, @unchecked Sendable {
             guard let current = value["current"],
                   let provider = current["provider"]?.stringValue,
                   let model = current["model"]?.stringValue else { return nil }
-            return AgentModelSelection(providerID: provider, modelID: model)
+            let reasoning = ReasoningLevel(rawValue: current["reasoningEffort"]?.stringValue ?? "")
+            return AgentModelSelection(providerID: provider, modelID: model, reasoningLevel: reasoning)
         }()
+        let reasoningLevel = ReasoningLevel(rawValue: value["current"]?["reasoningEffort"]?.stringValue ?? "")
+            ?? current?.reasoningLevel
         let groups = (value["groups"]?.arrayValue ?? []).compactMap { rawGroup -> AgentModelGroup? in
             guard let groupID = rawGroup["id"]?.stringValue else { return nil }
             let groupName = rawGroup["name"]?.stringValue ?? groupID
@@ -169,22 +172,27 @@ final class DSHAgentGateway: AgentGateway, @unchecked Sendable {
             }
             return AgentModelGroup(id: groupID, name: groupName, isOfficial: isOfficial, models: models)
         }
-        return AgentModelCatalog(groups: groups, currentModel: current)
+        return AgentModelCatalog(groups: groups, currentModel: current, currentReasoningLevel: reasoningLevel)
     }
 
     func selectModel(_ selection: AgentModelSelection, sessionID: String) async throws -> AgentModelSelection? {
+        var payload: [String: JSONValue] = [
+            "sessionId": .string(sessionID),
+            "provider": .string(selection.providerID),
+            "model": .string(selection.modelID)
+        ]
+        if let level = selection.reasoningLevel {
+            payload["reasoningEffort"] = .string(level.rawValue)
+        }
         let result = try await client.call(
             method: "session.selectModel",
-            payload: [
-                "sessionId": .string(sessionID),
-                "provider": .string(selection.providerID),
-                "model": .string(selection.modelID)
-            ]
+            payload: payload
         )
         guard let selected = result.value["selected"],
               let provider = selected["provider"]?.stringValue,
               let model = selected["model"]?.stringValue else { return nil }
-        return AgentModelSelection(providerID: provider, modelID: model)
+        let reasoning = ReasoningLevel(rawValue: selected["reasoningEffort"]?.stringValue ?? "")
+        return AgentModelSelection(providerID: provider, modelID: model, reasoningLevel: reasoning)
     }
 
     static func mapMux(_ request: DSHServerRequest) throws -> AgentGatewayEvent? {
