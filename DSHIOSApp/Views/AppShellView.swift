@@ -4,6 +4,7 @@ import UIKit
 struct AppShellView: View {
     @EnvironmentObject private var serverStore: ServerStore
     @StateObject private var viewModel = AppShellViewModel()
+    @Environment(\.scenePhase) private var scenePhase
     @State private var drawerProgress: CGFloat = 0
     @State private var drawerDragStartProgress: CGFloat?
     @State private var drawerDragAxis: DrawerDragAxis?
@@ -77,6 +78,11 @@ struct AppShellView: View {
                 profile: profile,
                 password: serverStore.password(for: profile) ?? ""
             )
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                Task { await viewModel.load() }
+            }
         }
     }
 

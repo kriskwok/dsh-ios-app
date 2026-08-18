@@ -10,6 +10,7 @@ private struct ChatScrollBottomPreferenceKey: PreferenceKey {
 
 struct ChatSessionView: View {
     @StateObject private var viewModel: ChatSessionViewModel
+    @Environment(\.scenePhase) private var scenePhase
     @FocusState private var composerFocused: Bool
     @State private var isFollowingLatest = true
     @State private var hasPerformedInitialScroll = false
@@ -189,6 +190,18 @@ struct ChatSessionView: View {
             }
         }
         .task { viewModel.start() }
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .active:
+                if viewModel.hasStarted && !viewModel.isConnected && !viewModel.isReconnecting {
+                    viewModel.reconnect()
+                }
+            case .background, .inactive:
+                showModelSelector = false
+            @unknown default:
+                break
+            }
+        }
         .onChange(of: viewModel.isConnected) { _, connected in
             onConnectionChanged(connected, viewModel.isReconnecting)
         }

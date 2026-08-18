@@ -23,6 +23,7 @@ struct ServerSettingsView: View {
                                     .buttonStyle(.borderedProminent)
                             }
                         }
+                        versionSection
                     }
                 } else {
                     List {
@@ -55,6 +56,7 @@ struct ServerSettingsView: View {
                         } footer: {
                             Text("公网连接必须使用 HTTPS 和身份认证。不要直接暴露 Agent 的内部监听端口。")
                         }
+                        versionSection
                     }
                 }
             }
@@ -88,6 +90,26 @@ struct ServerSettingsView: View {
             }
             .pickerStyle(.segmented)
         }
+    }
+
+    private var versionSection: some View {
+        Section {
+            HStack {
+                Spacer()
+                Text("DSH \(appVersion)")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+        } footer: {
+            Text("基于 Claude Code 与 Hermes 协议构建。")
+        }
+    }
+
+    private var appVersion: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.1"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        return "v\(version) (\(build))"
     }
 }
 

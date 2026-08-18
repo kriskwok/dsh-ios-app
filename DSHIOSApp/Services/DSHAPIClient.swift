@@ -182,14 +182,33 @@ final class DSHAPIClient: @unchecked Sendable {
         }
     }
 
+    private final class PingContinuationBox: @unchecked Sendable {
+        private var continuation: CheckedContinuation<Void, Error>?
+        private let lock = NSLock()
+
+        init(_ continuation: CheckedContinuation<Void, Error>) {
+            self.continuation = continuation
+        }
+
+        func resume(with error: Error?) {
+            lock.lock()
+            let cont = continuation
+            continuation = nil
+            lock.unlock()
+            guard let cont else { return }
+            if let error {
+                cont.resume(throwing: error)
+            } else {
+                cont.resume()
+            }
+        }
+    }
+
     private static func sendPing(on socket: URLSessionWebSocketTask) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            let box = PingContinuationBox(continuation)
             socket.sendPing { error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume()
-                }
+                box.resume(with: error)
             }
         }
     }

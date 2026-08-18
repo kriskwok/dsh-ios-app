@@ -51,6 +51,12 @@ actor HermesRPCClient {
     }
 
     func connect() async throws {
+        if let socket, socket.state != .running {
+            self.socket = nil
+            receiveTask?.cancel()
+            receiveTask = nil
+            finishAll(with: HermesClientError.disconnected)
+        }
         guard socket == nil else { return }
         let ticket = try await mintTicket()
         var components = URLComponents(url: endpoint("api/ws"), resolvingAgainstBaseURL: false)

@@ -30,6 +30,7 @@ final class ChatSessionViewModel: ObservableObject {
     private var eventTask: Task<Void, Never>?
     private var startupTask: Task<Void, Never>?
     private var toolDetails: [String: String] = [:]
+    private(set) var hasStarted = false
 
     var pendingApproval: AgentApprovalRequest? { pendingApprovals.first }
 
@@ -60,6 +61,7 @@ final class ChatSessionViewModel: ObservableObject {
 
     func start() {
         guard eventTask == nil, startupTask == nil else { return }
+        hasStarted = true
 
         eventTask = Task { [weak self] in
             await self?.observeEvents()
@@ -76,7 +78,11 @@ final class ChatSessionViewModel: ObservableObject {
                     apply(context)
                     await loadModels()
                 } else {
-                    isLoading = false
+                    let context = try await gateway.createSession(in: workspace)
+                    apply(context)
+                    storedSession = context.session
+                    onSessionCreated(context.session)
+                    await loadModels()
                 }
                 errorMessage = nil
             } catch {
@@ -97,6 +103,13 @@ final class ChatSessionViewModel: ObservableObject {
         gateway.close()
         isConnected = false
         isReconnecting = false
+        hasStarted = false
+    }
+
+    func reconnect() {
+        stop()
+        isLoading = true
+        start()
     }
 
     func send() async {
