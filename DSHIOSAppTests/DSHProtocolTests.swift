@@ -197,6 +197,70 @@ final class DSHProtocolTests: XCTestCase {
         XCTAssertEqual(outcome, "allowed-once")
     }
 
+    func testMapsQuestionRequestAndKeepsResponseRPCID() throws {
+        let request = DSHServerRequest(
+            type: "server-request",
+            rpcId: "question-rpc-1",
+            method: "question/requested",
+            payload: .object([
+                "type": .string("question/requested"),
+                "sessionId": .string("session-1"),
+                "questions": .array([
+                    .object([
+                        "id": .string("q-1"),
+                        "question": .string("请选择部署方案"),
+                        "header": .string("部署"),
+                        "detail": .string("选择部署方式"),
+                        "multiSelect": .bool(false),
+                        "options": .array([
+                            .object(["label": .string("方案A"), "description": .string("快速")]),
+                            .object(["label": .string("方案B")])
+                        ])
+                    ])
+                ])
+            ])
+        )
+
+        guard let mapped = try DSHAgentGateway.mapMux(request),
+              case .questionRequested(let question) = mapped else {
+            return XCTFail("Expected question request")
+        }
+        XCTAssertEqual(question.id, "question-rpc-1")
+        XCTAssertEqual(question.sessionID, "session-1")
+        XCTAssertEqual(question.responseToken, "question-rpc-1")
+        XCTAssertEqual(question.questions.count, 1)
+        XCTAssertEqual(question.questions[0].id, "q-1")
+        XCTAssertEqual(question.questions[0].question, "请选择部署方案")
+        XCTAssertEqual(question.questions[0].header, "部署")
+        XCTAssertEqual(question.questions[0].detail, "选择部署方式")
+        XCTAssertEqual(question.questions[0].options.count, 2)
+        XCTAssertEqual(question.questions[0].options[0].label, "方案A")
+        XCTAssertEqual(question.questions[0].options[0].description, "快速")
+        XCTAssertFalse(question.questions[0].multiSelect)
+        XCTAssertTrue(question.waitsForResolutionEvent)
+    }
+
+    func testMapsQuestionResolution() throws {
+        let request = DSHServerRequest(
+            type: "server-request",
+            rpcId: "resolved-rpc",
+            method: "question/resolved",
+            payload: .object([
+                "sessionId": .string("session-1"),
+                "questionRpcId": .string("question-rpc-1"),
+                "outcome": .string("answered")
+            ])
+        )
+
+        guard let mapped = try DSHAgentGateway.mapMux(request),
+              case .questionResolved(let sessionID, let questionRpcId, let outcome) = mapped else {
+            return XCTFail("Expected question resolution")
+        }
+        XCTAssertEqual(sessionID, "session-1")
+        XCTAssertEqual(questionRpcId, "question-rpc-1")
+        XCTAssertEqual(outcome, "answered")
+    }
+
     private func event(type: String, seq: Int, data: JSONValue) throws -> DSHSessionEvent {
         try DSHSessionEvent(json: .object([
             "type": .string(type),

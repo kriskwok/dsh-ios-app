@@ -116,6 +116,26 @@ final class DSHAPIClient: @unchecked Sendable {
                 "value": .object(value)
             ])
         ])
+        try await sendRespond(body: body, rpcId: rpcId)
+    }
+
+    func respondError(rpcId: String, code: String, message: String) async throws {
+        let body: JSONValue = .object([
+            "type": .string("client-response"),
+            "rpcId": .string(rpcId),
+            "result": .object([
+                "ok": .bool(false),
+                "error": .object([
+                    "code": .string(code),
+                    "message": .string(message),
+                    "details": .object([:])
+                ])
+            ])
+        ])
+        try await sendRespond(body: body, rpcId: rpcId)
+    }
+
+    private func sendRespond(body: JSONValue, rpcId: String) async throws {
         var request = authenticatedRequest(url: baseURL.appendingPathComponent("api/respond"), method: "POST")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(body)

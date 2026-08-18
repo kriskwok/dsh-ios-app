@@ -11,6 +11,8 @@ final class ChatSessionViewModel: ObservableObject {
     @Published private(set) var isStopping = false
     @Published private(set) var pendingApprovals: [AgentApprovalRequest] = []
     @Published private(set) var respondingApprovalID: String?
+    @Published private(set) var pendingQuestions: [AgentQuestionRequest] = []
+    @Published private(set) var respondingQuestionID: String?
     @Published var errorMessage: String?
     @Published var title: String
     @Published private(set) var modelCatalog: AgentModelCatalog?
@@ -33,6 +35,7 @@ final class ChatSessionViewModel: ObservableObject {
     private(set) var hasStarted = false
 
     var pendingApproval: AgentApprovalRequest? { pendingApprovals.first }
+    var pendingQuestion: AgentQuestionRequest? { pendingQuestions.first }
 
     init(
         profile: ServerProfile,
@@ -202,6 +205,40 @@ final class ChatSessionViewModel: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
             respondingApprovalID = nil
+        }
+    }
+
+    func respond(to question: AgentQuestionRequest, answers: [AgentQuestionAnswer]) async {
+        guard pendingQuestions.contains(where: { $0.id == question.id }),
+              respondingQuestionID == nil else { return }
+        respondingQuestionID = question.id
+        errorMessage = nil
+        do {
+            try await gateway.respond(to: question, answers: answers)
+            if !question.waitsForResolutionEvent {
+                pendingQuestions.removeAll { $0.id == question.id }
+                respondingQuestionID = nil
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+            respondingQuestionID = nil
+        }
+    }
+
+    func cancelQuestion(_ question: AgentQuestionRequest) async {
+        guard pendingQuestions.contains(where: { $0.id == question.id }),
+              respondingQuestionID == nil else { return }
+        respondingQuestionID = question.id
+        errorMessage = nil
+        do {
+            try await gateway.respondCancelled(to: question)
+            if !question.waitsForResolutionEvent {
+                pendingQuestions.removeAll { $0.id == question.id }
+                respondingQuestionID = nil
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+            respondingQuestionID = nil
         }
     }
 
@@ -395,6 +432,21 @@ final class ChatSessionViewModel: ObservableObject {
             guard isCurrent(sessionID) else { return }
             pendingApprovals.removeAll { $0.id == approvalID }
             if respondingApprovalID == approvalID { respondingApprovalID = nil }
+
+        case .questionRequested(var question):
+            guard isCurrent(question.sessionID) else { return }
+            finishStreamingAssistant()
+            if let index = pendingQuestions.firstIndex(where: { $0.id == question.id }) {
+                pendingQuestions[index] = question
+            } else {
+                pendingQuestions.append(question)
+            }
+            isRunning = true
+
+        case .questionResolved(let sessionID, let questionRpcId, _):
+            guard isCurrent(sessionID) else { return }
+            pendingQuestions.removeAll { $0.responseToken == questionRpcId }
+            if respondingQuestionID == questionRpcId { respondingQuestionID = nil }
 
         case .failure(let message):
             errorMessage = message

@@ -41,8 +41,16 @@ final class AgentPresentationTests: XCTestCase {
     }
 
     func testMarkdownTextUsesFullSyntax() {
-        let rendered = MarkdownText("**重点**").value
+        let blocks = MarkdownBlockParser.blocks(in: MarkdownBlockParser.normalize("**重点**"))
+        XCTAssertEqual(blocks, [.paragraph("**重点**")])
 
+        let rendered = (try? AttributedString(
+            markdown: "**重点**",
+            options: .init(
+                interpretedSyntax: .inlineOnlyPreservingWhitespace,
+                failurePolicy: .returnPartiallyParsedIfPossible
+            )
+        )) ?? AttributedString("**重点**")
         XCTAssertEqual(String(rendered.characters), "重点")
         XCTAssertTrue(rendered.runs.contains {
             $0.inlinePresentationIntent?.contains(.stronglyEmphasized) == true

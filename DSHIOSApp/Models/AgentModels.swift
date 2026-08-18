@@ -181,6 +181,35 @@ struct AgentApprovalRequest: Identifiable, Equatable, Sendable {
     let waitsForResolutionEvent: Bool
 }
 
+struct AgentQuestionOption: Identifiable, Equatable, Sendable {
+    let id: String
+    let label: String
+    let description: String?
+}
+
+struct AgentQuestion: Identifiable, Equatable, Sendable {
+    let id: String
+    let question: String
+    let detail: String?
+    let header: String?
+    let options: [AgentQuestionOption]
+    let multiSelect: Bool
+}
+
+struct AgentQuestionRequest: Identifiable, Equatable, Sendable {
+    let id: String
+    let sessionID: String
+    let responseToken: String?
+    let questions: [AgentQuestion]
+    let waitsForResolutionEvent: Bool
+}
+
+struct AgentQuestionAnswer: Equatable, Sendable {
+    let id: String
+    let selected: [String]
+    let custom: String?
+}
+
 enum AgentGatewayEvent: Sendable {
     case connected
     case userCommitted(sessionID: String, requestID: String?, text: String?)
@@ -192,6 +221,8 @@ enum AgentGatewayEvent: Sendable {
     case running(sessionID: String, value: Bool)
     case approvalRequested(AgentApprovalRequest)
     case approvalResolved(sessionID: String, approvalID: String, outcome: String)
+    case questionRequested(AgentQuestionRequest)
+    case questionResolved(sessionID: String, questionRpcId: String, outcome: String)
     case failure(String)
 }
 
@@ -203,8 +234,24 @@ protocol AgentGateway: AnyObject, Sendable {
     func send(text: String, sessionID: String, requestID: String) async throws
     func cancel(sessionID: String) async throws
     func respond(to approval: AgentApprovalRequest, choice: AgentApprovalChoice) async throws
+    func respond(to question: AgentQuestionRequest, answers: [AgentQuestionAnswer]) async throws
+    func respondCancelled(to question: AgentQuestionRequest) async throws
     func events() -> AsyncThrowingStream<AgentGatewayEvent, Error>
     func close()
     func fetchModels(sessionID: String) async throws -> AgentModelCatalog
     func selectModel(_ selection: AgentModelSelection, sessionID: String) async throws -> AgentModelSelection?
+}
+
+extension AgentGateway {
+    func respond(to question: AgentQuestionRequest, answers: [AgentQuestionAnswer]) async throws {
+        throw AgentGatewayUnsupportedError()
+    }
+
+    func respondCancelled(to question: AgentQuestionRequest) async throws {
+        throw AgentGatewayUnsupportedError()
+    }
+}
+
+struct AgentGatewayUnsupportedError: LocalizedError {
+    var errorDescription: String? { "当前服务器不支持提问功能" }
 }

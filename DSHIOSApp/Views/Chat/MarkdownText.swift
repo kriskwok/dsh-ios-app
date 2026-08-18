@@ -1,5 +1,78 @@
 import SwiftUI
 
+private struct BasicAuthTokenKey: EnvironmentKey {
+    static let defaultValue: String? = nil
+}
+
+extension EnvironmentValues {
+    var basicAuthToken: String? {
+        get { self[BasicAuthTokenKey.self] }
+        set { self[BasicAuthTokenKey.self] = newValue }
+    }
+}
+
+struct AuthAsyncImage: View {
+    let url: URL
+    let authToken: String?
+    @State private var image: UIImage?
+    @State private var didFail = false
+    @State private var didLoad = false
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+            } else if didFail {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.secondary.opacity(0.1))
+                    .frame(height: 120)
+                    .overlay {
+                        VStack(spacing: 4) {
+                            Image(systemName: "photo.badge.exclamationmark")
+                                .font(.title2)
+                                .foregroundStyle(.secondary)
+                            Text("图片加载失败")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+            } else {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.secondary.opacity(0.1))
+                    .frame(height: 200)
+                    .overlay(ProgressView())
+            }
+        }
+        .task(id: url.absoluteString) {
+            guard !didLoad else { return }
+            await loadImage()
+        }
+    }
+
+    private func loadImage() async {
+        var request = URLRequest(url: url)
+        if let authToken {
+            request.setValue("Basic \(authToken)", forHTTPHeaderField: "Authorization")
+        }
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode,
+                  let uiImage = UIImage(data: data) else {
+                await MainActor.run { didFail = true }
+                return
+            }
+            await MainActor.run {
+                self.image = uiImage
+                self.didLoad = true
+            }
+        } catch {
+            await MainActor.run { didFail = true }
+        }
+    }
+}
+
 struct MarkdownText: View {
     let text: String
     @State private var blocks: [MarkdownBlock]?
@@ -39,6 +112,7 @@ enum MarkdownBlock: Equatable {
     case code(language: String?, text: String)
     case table(headers: [String], rows: [[String]])
     case divider
+    case image(alt: String, url: String)
 }
 
 enum MarkdownBlockParser {
@@ -84,6 +158,12 @@ enum MarkdownBlockParser {
 
             if isDivider(trimmed) {
                 blocks.append(.divider)
+                index += 1
+                continue
+            }
+
+            if let image = parseImageLine(trimmed) {
+                blocks.append(.image(alt: image.alt, url: image.url))
                 index += 1
                 continue
             }
@@ -161,6 +241,7 @@ enum MarkdownBlockParser {
         isFenceStart(line)
             || parseHeading(line) != nil
             || isDivider(line)
+            || parseImageLine(line) != nil
             || unorderedItem(line) != nil
             || orderedItem(line) != nil
             || quoteLine(line) != nil
@@ -198,6 +279,20 @@ enum MarkdownBlockParser {
     private static func isDivider(_ line: String) -> Bool {
         let compact = line.replacingOccurrences(of: " ", with: "")
         return compact == "---" || compact == "***" || compact == "___"
+    }
+
+    private static func parseImageLine(_ line: String) -> (alt: String, url: String)? {
+        guard line.hasPrefix("![") else { return nil }
+        guard let closeBracket = line.firstIndex(of: "]") else { return nil }
+        let altRange = line.index(line.startIndex, offsetBy: 2)..<closeBracket
+        let alt = String(line[altRange])
+        let afterBracket = line.index(after: closeBracket)
+        guard afterBracket < line.endIndex, line[afterBracket] == "(" else { return nil }
+        let urlStart = line.index(after: afterBracket)
+        guard let closeParen = line[urlStart...].firstIndex(of: ")") else { return nil }
+        let url = String(line[urlStart..<closeParen])
+        guard !url.isEmpty else { return nil }
+        return (alt, url)
     }
 
     private static func unorderedItem(_ line: String) -> String? {
@@ -250,6 +345,7 @@ enum MarkdownBlockParser {
 
 struct MarkdownBlockView: View {
     let block: MarkdownBlock
+    @State private var showFullImage = false
 
     var body: some View {
         switch block {
@@ -300,6 +396,8 @@ struct MarkdownBlockView: View {
             MarkdownTableView(headers: headers, rows: rows)
         case .divider:
             Divider()
+        case .image(let alt, let url):
+            MarkdownImageView(alt: alt, url: url, isPresented: $showFullImage)
         }
     }
 
@@ -335,6 +433,168 @@ struct MarkdownBlockView: View {
         case 3: .headline
         default: .subheadline.weight(.semibold)
         }
+    }
+}
+
+struct MarkdownImageView: View {
+    let alt: String
+    let url: String
+    @Binding var isPresented: Bool
+    @Environment(\.basicAuthToken) private var authToken
+
+    var body: some View {
+        Group {
+            if let dataURL = parseDataURL(url) {
+                base64Image(data: dataURL)
+            } else if let imageURL = URL(string: url) {
+                AuthAsyncImage(url: imageURL, authToken: authToken)
+                    .frame(maxHeight: 300)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .onTapGesture { isPresented = true }
+            } else {
+                Text("[\(alt)](\(url))")
+                    .font(.body)
+                    .foregroundStyle(.primary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+        .fullScreenCover(isPresented: $isPresented) {
+            FullscreenImageView(url: url, alt: alt, isPresented: $isPresented)
+        }
+    }
+
+    private func parseDataURL(_ url: String) -> Data? {
+        guard url.hasPrefix("data:image/") else { return nil }
+        guard let commaIndex = url.firstIndex(of: ",") else { return nil }
+        let base64String = String(url[url.index(after: commaIndex)...])
+        return Data(base64Encoded: base64String)
+    }
+
+    private func base64Image(data: Data) -> some View {
+        Group {
+            if let uiImage = UIImage(data: data) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxHeight: 300)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .onTapGesture { isPresented = true }
+            } else {
+                Text("[\(alt)]")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+struct FullscreenImageView: View {
+    let url: String
+    let alt: String
+    @Binding var isPresented: Bool
+    @Environment(\.basicAuthToken) private var authToken
+    @State private var scale: CGFloat = 1
+    @State private var lastScale: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @State private var lastOffset: CGSize = .zero
+    @State private var loadedImage: UIImage?
+    @State private var didFail = false
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.ignoresSafeArea()
+
+            if let loadedImage {
+                Image(uiImage: loadedImage)
+                    .resizable()
+                    .scaledToFit()
+                    .scaleEffect(scale)
+                    .offset(offset)
+                    .gesture(
+                        MagnificationGesture()
+                            .onChanged { value in
+                                scale = max(1, min(lastScale * value, 5))
+                            }
+                            .onEnded { _ in
+                                lastScale = scale
+                                if scale < 1 {
+                                    withAnimation { scale = 1; lastScale = 1; offset = .zero; lastOffset = .zero }
+                                }
+                            }
+                    )
+                    .simultaneousGesture(
+                        DragGesture()
+                            .onChanged { value in
+                                offset = CGSize(width: lastOffset.width + value.translation.width, height: lastOffset.height + value.translation.height)
+                            }
+                            .onEnded { _ in
+                                lastOffset = offset
+                            }
+                    )
+                    .onTapGesture(count: 2) {
+                        withAnimation {
+                            if scale > 1 {
+                                scale = 1; lastScale = 1; offset = .zero; lastOffset = .zero
+                            } else {
+                                scale = 2; lastScale = 2
+                            }
+                        }
+                    }
+            } else if didFail {
+                Text("加载失败")
+                    .foregroundStyle(.white.opacity(0.6))
+            } else {
+                ProgressView()
+                    .tint(.white)
+            }
+
+            Button {
+                isPresented = false
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(Color.white.opacity(0.15)))
+            }
+            .padding(16)
+        }
+        .task {
+            await loadImage()
+        }
+    }
+
+    private func loadImage() async {
+        if let dataURL = parseDataURL(url), let uiImage = UIImage(data: dataURL) {
+            await MainActor.run { loadedImage = uiImage }
+            return
+        }
+        guard let imageURL = URL(string: url) else {
+            await MainActor.run { didFail = true }
+            return
+        }
+        var request = URLRequest(url: imageURL)
+        if let authToken {
+            request.setValue("Basic \(authToken)", forHTTPHeaderField: "Authorization")
+        }
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode,
+                  let uiImage = UIImage(data: data) else {
+                await MainActor.run { didFail = true }
+                return
+            }
+            await MainActor.run { loadedImage = uiImage }
+        } catch {
+            await MainActor.run { didFail = true }
+        }
+    }
+
+    private func parseDataURL(_ url: String) -> Data? {
+        guard url.hasPrefix("data:image/") else { return nil }
+        guard let commaIndex = url.firstIndex(of: ",") else { return nil }
+        let base64String = String(url[url.index(after: commaIndex)...])
+        return Data(base64Encoded: base64String)
     }
 }
 

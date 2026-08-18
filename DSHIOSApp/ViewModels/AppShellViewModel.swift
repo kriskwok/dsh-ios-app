@@ -103,6 +103,15 @@ final class AppShellViewModel: ObservableObject {
         }
     }
 
+    func updateSessionRunning(_ sessionID: String, isRunning: Bool) {
+        if let index = sessions.firstIndex(where: { $0.id == sessionID }) {
+            sessions[index].isRunning = isRunning
+        }
+        if target.session?.id == sessionID {
+            target.session?.isRunning = isRunning
+        }
+    }
+
     func sessions(in workspace: AgentWorkspace) -> [AgentSessionSummary] {
         workspace.sessionIDs.compactMap { id in
             sessions.first { $0.id == id && !$0.isBlank && !archivedSessionIDs.contains($0.id) }

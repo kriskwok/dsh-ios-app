@@ -114,6 +114,11 @@ struct AppShellView: View {
                 },
                 onModelSelectorChanged: { active in
                     modelSelectorIsActive = active
+                },
+                onRunningChanged: { isRunning in
+                    if let sessionID = target.session?.id {
+                        viewModel.updateSessionRunning(sessionID, isRunning: isRunning)
+                    }
                 }
             )
             .id(target.id)

@@ -103,6 +103,37 @@ final class DSHAgentGateway: AgentGateway, @unchecked Sendable {
         ])
     }
 
+    func respond(to question: AgentQuestionRequest, answers: [AgentQuestionAnswer]) async throws {
+        guard let rpcID = question.responseToken else {
+            throw DSHClientError.invalidResponse("提问缺少响应标识")
+        }
+        let answerItems: [JSONValue] = answers.map { answer in
+            var item: [String: JSONValue] = ["id": .string(answer.id)]
+            if !answer.selected.isEmpty {
+                item["selected"] = .array(answer.selected.map { .string($0) })
+            }
+            if let custom = answer.custom, !custom.isEmpty {
+                item["custom"] = .string(custom)
+            }
+            return .object(item)
+        }
+        try await client.respond(rpcId: rpcID, value: [
+            "sessionId": .string(question.sessionID),
+            "answer": .object(["answers": .array(answerItems)])
+        ])
+    }
+
+    func respondCancelled(to question: AgentQuestionRequest) async throws {
+        guard let rpcID = question.responseToken else {
+            throw DSHClientError.invalidResponse("提问缺少响应标识")
+        }
+        try await client.respondError(
+            rpcId: rpcID,
+            code: "cancelled",
+            message: "the user closed this question request"
+        )
+    }
+
     func events() -> AsyncThrowingStream<AgentGatewayEvent, Error> {
         AsyncThrowingStream { continuation in
             let muxTask = Task {
@@ -220,6 +251,45 @@ final class DSHAgentGateway: AgentGateway, @unchecked Sendable {
             return .approvalResolved(
                 sessionID: sessionID,
                 approvalID: approvalID,
+                outcome: request.payload["outcome"]?.stringValue ?? ""
+            )
+        case "question/requested":
+            guard let sessionID = request.payload["sessionId"]?.stringValue,
+                  let rawQuestions = request.payload["questions"]?.arrayValue else { return nil }
+            let questions = rawQuestions.compactMap { raw -> AgentQuestion? in
+                guard let id = raw["id"]?.stringValue,
+                      let question = raw["question"]?.stringValue else { return nil }
+                let options = (raw["options"]?.arrayValue ?? []).compactMap { option -> AgentQuestionOption? in
+                    guard let label = option["label"]?.stringValue else { return nil }
+                    return AgentQuestionOption(
+                        id: label,
+                        label: label,
+                        description: option["description"]?.stringValue
+                    )
+                }
+                return AgentQuestion(
+                    id: id,
+                    question: question,
+                    detail: raw["detail"]?.stringValue,
+                    header: raw["header"]?.stringValue,
+                    options: options,
+                    multiSelect: raw["multiSelect"]?.boolValue ?? false
+                )
+            }
+            guard !questions.isEmpty else { return nil }
+            return .questionRequested(AgentQuestionRequest(
+                id: request.rpcId,
+                sessionID: sessionID,
+                responseToken: request.rpcId,
+                questions: questions,
+                waitsForResolutionEvent: true
+            ))
+        case "question/resolved":
+            guard let sessionID = request.payload["sessionId"]?.stringValue,
+                  let questionRpcId = request.payload["questionRpcId"]?.stringValue else { return nil }
+            return .questionResolved(
+                sessionID: sessionID,
+                questionRpcId: questionRpcId,
                 outcome: request.payload["outcome"]?.stringValue ?? ""
             )
         case "session/event":

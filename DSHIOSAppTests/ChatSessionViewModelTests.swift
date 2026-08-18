@@ -79,6 +79,83 @@ final class ChatSessionViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.isReconnecting)
         viewModel.stop()
     }
+    func testHandlesQuestionRequestAndResolution() {
+        let session = AgentSessionSummary(id: "session-1", title: "测试")
+        let viewModel = ChatSessionViewModel(
+            profile: ServerProfile(
+                kind: .dsh,
+                name: "DSH",
+                baseURL: URL(string: "https://dsh.example.com")!
+            ),
+            password: "",
+            session: session,
+            workspace: nil,
+            onSessionCreated: { _ in },
+            onPromptAccepted: { _ in }
+        )
+
+        let question = AgentQuestionRequest(
+            id: "question-rpc-1",
+            sessionID: session.id,
+            responseToken: "question-rpc-1",
+            questions: [
+                AgentQuestion(
+                    id: "q-1",
+                    question: "请选择方案",
+                    detail: nil,
+                    header: nil,
+                    options: [AgentQuestionOption(id: "A", label: "方案A", description: nil)],
+                    multiSelect: false
+                )
+            ],
+            waitsForResolutionEvent: true
+        )
+
+        viewModel.handle(.questionRequested(question))
+        XCTAssertEqual(viewModel.pendingQuestion?.id, "question-rpc-1")
+        XCTAssertEqual(viewModel.pendingQuestions.count, 1)
+        XCTAssertTrue(viewModel.isRunning)
+
+        viewModel.handle(.questionResolved(sessionID: session.id, questionRpcId: "question-rpc-1", outcome: "answered"))
+        XCTAssertNil(viewModel.pendingQuestion)
+        XCTAssertTrue(viewModel.pendingQuestions.isEmpty)
+    }
+
+    func testQuestionRequestFromOtherSessionIsIgnored() {
+        let session = AgentSessionSummary(id: "session-1", title: "测试")
+        let viewModel = ChatSessionViewModel(
+            profile: ServerProfile(
+                kind: .dsh,
+                name: "DSH",
+                baseURL: URL(string: "https://dsh.example.com")!
+            ),
+            password: "",
+            session: session,
+            workspace: nil,
+            onSessionCreated: { _ in },
+            onPromptAccepted: { _ in }
+        )
+
+        let question = AgentQuestionRequest(
+            id: "question-rpc-2",
+            sessionID: "other-session",
+            responseToken: "question-rpc-2",
+            questions: [
+                AgentQuestion(
+                    id: "q-1",
+                    question: "请选择方案",
+                    detail: nil,
+                    header: nil,
+                    options: [],
+                    multiSelect: false
+                )
+            ],
+            waitsForResolutionEvent: true
+        )
+
+        viewModel.handle(.questionRequested(question))
+        XCTAssertTrue(viewModel.pendingQuestions.isEmpty)
+    }
 }
 
 private enum ReconnectTestError: Error {
@@ -125,6 +202,10 @@ private final class ReconnectingAgentGateway: AgentGateway, @unchecked Sendable 
     func send(text: String, sessionID: String, requestID: String) async throws {}
     func cancel(sessionID: String) async throws {}
     func respond(to approval: AgentApprovalRequest, choice: AgentApprovalChoice) async throws {}
+    func fetchModels(sessionID: String) async throws -> AgentModelCatalog {
+        AgentModelCatalog(groups: [], currentModel: nil, currentReasoningLevel: nil)
+    }
+    func selectModel(_ selection: AgentModelSelection, sessionID: String) async throws -> AgentModelSelection? { nil }
 
     func events() -> AsyncThrowingStream<AgentGatewayEvent, Error> {
         lock.lock()

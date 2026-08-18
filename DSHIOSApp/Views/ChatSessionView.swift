@@ -21,6 +21,8 @@ struct ChatSessionView: View {
     private let onConnectionChanged: (Bool, Bool) -> Void
     private let isDrawerGestureActive: Bool
     private let onModelSelectorChanged: (Bool) -> Void
+    private let onRunningChanged: (Bool) -> Void
+    private let basicAuthToken: String?
 
     init(
         profile: ServerProfile,
@@ -33,7 +35,8 @@ struct ChatSessionView: View {
         onPromptAccepted: @escaping @MainActor (String) -> Void,
         isDrawerGestureActive: Bool = false,
         onConnectionChanged: @escaping (Bool, Bool) -> Void = { _, _ in },
-        onModelSelectorChanged: @escaping (Bool) -> Void = { _ in }
+        onModelSelectorChanged: @escaping (Bool) -> Void = { _ in },
+        onRunningChanged: @escaping (Bool) -> Void = { _ in }
     ) {
         workspaceTitle = workspace?.title
         self.onOpenDrawer = onOpenDrawer
@@ -41,6 +44,8 @@ struct ChatSessionView: View {
         self.isDrawerGestureActive = isDrawerGestureActive
         self.onConnectionChanged = onConnectionChanged
         self.onModelSelectorChanged = onModelSelectorChanged
+        self.onRunningChanged = onRunningChanged
+        basicAuthToken = profile.username.isEmpty ? nil : Data("\(profile.username):\(password)".utf8).base64EncodedString()
         _viewModel = StateObject(wrappedValue: ChatSessionViewModel(
             profile: profile,
             password: password,
@@ -72,6 +77,7 @@ struct ChatSessionView: View {
                         }
                         if viewModel.isRunning
                             && viewModel.pendingApproval == nil
+                            && viewModel.pendingQuestion == nil
                             && viewModel.messages.last?.isStreaming != true {
                             ThinkingIndicator(agentName: viewModel.agentName)
                                 .id("thinking-indicator")
@@ -113,10 +119,14 @@ struct ChatSessionView: View {
                     guard !isLoading, !viewModel.messages.isEmpty, !hasPerformedInitialScroll else { return }
                     scheduleScrollToLatest(using: proxy, force: true)
                 }
-                .onChange(of: viewModel.isRunning) { _, _ in
+                .onChange(of: viewModel.isRunning) { _, isRunning in
+                    onRunningChanged(isRunning)
                     scheduleScrollToLatest(using: proxy)
                 }
                 .onChange(of: viewModel.pendingApprovals) { _, _ in
+                    scheduleScrollToLatest(using: proxy)
+                }
+                .onChange(of: viewModel.pendingQuestions) { _, _ in
                     scheduleScrollToLatest(using: proxy)
                 }
                 .onChange(of: composerFocused) { _, focused in
@@ -215,6 +225,7 @@ struct ChatSessionView: View {
             onConnectionChanged(viewModel.isConnected, reconnecting)
         }
         .onDisappear { viewModel.stop() }
+        .environment(\.basicAuthToken, basicAuthToken)
     }
 
     private func scheduleScrollToLatest(using proxy: ScrollViewProxy, force: Bool = false) {
@@ -337,7 +348,7 @@ struct ChatSessionView: View {
                 .disabled(viewModel.isStopping)
                 .accessibilityLabel("停止生成")
             } else {
-                Button { Task { await viewModel.send() } } label: {
+                Button { composerFocused = false; Task { await viewModel.send() } } label: {
                     ZStack {
                         Circle().fill(canSend ? Color.accentColor : Color.secondary.opacity(0.25))
                         Image(systemName: "arrow.up")
@@ -401,6 +412,18 @@ struct ChatSessionView: View {
                 isResponding: viewModel.respondingApprovalID == approval.id,
                 onChoice: { choice in
                     Task { await viewModel.respond(to: approval, choice: choice) }
+                }
+            )
+        } else if let question = viewModel.pendingQuestion {
+            QuestionComposerPanel(
+                question: question,
+                pendingCount: viewModel.pendingQuestions.count,
+                isResponding: viewModel.respondingQuestionID == question.id,
+                onAnswer: { answers in
+                    Task { await viewModel.respond(to: question, answers: answers) }
+                },
+                onCancel: {
+                    Task { await viewModel.cancelQuestion(question) }
                 }
             )
         } else {
