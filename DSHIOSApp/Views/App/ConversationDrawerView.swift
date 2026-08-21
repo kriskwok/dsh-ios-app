@@ -344,7 +344,8 @@ struct ConversationDrawerView: View {
         } label: {
             HStack(spacing: 9) {
                 Text(session.title)
-                    .font(.callout)
+                    .font(.callout.weight(selectedSessionID == session.id ? .semibold : .regular))
+                    .foregroundStyle(selectedSessionID == session.id ? Color.accentColor : .primary)
                     .lineLimit(1)
                 if session.modelProvider == "openai" { Text("openai").font(.system(size: 9, weight: .semibold, design: .monospaced)).foregroundStyle(.white).padding(.horizontal, 5).padding(.vertical, 2).background(Color.blue, in: Capsule()).fixedSize() }
                 Spacer(minLength: 4)

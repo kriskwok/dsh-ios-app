@@ -54,18 +54,18 @@ final class HermesAgentGateway: AgentGateway, @unchecked Sendable {
             }
         }
 
-        // Coding agent sessions live outside projects.tree; collect them from session.list
-        let codingAgentSessions = sessionsByID.values.filter {
-            $0.source == "coding_agent" || $0.channel.title.lowercased().contains("coding")
+        // Coding agent sessions (created via CLI/desktop with Codex etc.)
+        // are grouped separately, inserted second-to-last.
+        let codingAgentSessions = sessionsByID.values.filter { session in
+            session.source == "cli"
         }
         if !codingAgentSessions.isEmpty {
             let caWorkspace = AgentWorkspace(
                 id: "__coding_agent__",
                 path: "",
                 title: "CODING AGENT",
-                sessionIDs: codingAgentSessions.map(\.id).sorted()
+                sessionIDs: codingAgentSessions.map(\.id)
             )
-            // Insert second-to-last
             if workspaces.count >= 1 {
                 workspaces.insert(caWorkspace, at: max(workspaces.count - 1, 0))
             } else {
