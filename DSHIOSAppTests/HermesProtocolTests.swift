@@ -76,7 +76,7 @@ final class HermesProtocolTests: XCTestCase {
         XCTAssertFalse(session.isBlank)
         XCTAssertFalse(session.isRunning)
         XCTAssertEqual(session.source, "desktop")
-        XCTAssertEqual(session.channel.title, "Desktop")
+        XCTAssertEqual(session.channel.title, "桌面端")
     }
 
     func testReadsHydratedProjectLanes() {
@@ -157,7 +157,7 @@ final class HermesProtocolTests: XCTestCase {
     }
 
     func testGroupsKnownAndFutureHermesSources() {
-        XCTAssertEqual(AgentSessionChannel(source: "ios").title, "iPhone")
+        XCTAssertEqual(AgentSessionChannel(source: "ios").title, "APP")
         XCTAssertEqual(AgentSessionChannel(source: "weixin").title, "微信")
         XCTAssertEqual(AgentSessionChannel(source: "feishu").title, "飞书")
         XCTAssertEqual(AgentSessionChannel(source: "subagent").id, "automation")

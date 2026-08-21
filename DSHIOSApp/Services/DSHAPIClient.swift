@@ -51,6 +51,7 @@ final class DSHAPIClient: @unchecked Sendable {
     private let password: String
     private let delegate: DSHSessionDelegate
     private let session: URLSession
+    private var authCookie: String?
 
     init(profile: ServerProfile, password: String) {
         baseURL = profile.baseURL
@@ -62,11 +63,39 @@ final class DSHAPIClient: @unchecked Sendable {
         configuration.timeoutIntervalForRequest = 30
         configuration.timeoutIntervalForResource = 7 * 24 * 60 * 60
         configuration.waitsForConnectivity = true
+        configuration.httpCookieAcceptPolicy = .always
+        configuration.httpShouldSetCookies = true
         session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
     }
 
     deinit {
         session.invalidateAndCancel()
+    }
+
+    func authenticate() async throws {
+        var request = URLRequest(url: baseURL.appendingPathComponent("login"))
+        request.httpMethod = "GET"
+        if !username.isEmpty {
+            let token = Data("\(username):\(password)".utf8).base64EncodedString()
+            request.setValue("Basic \(token)", forHTTPHeaderField: "Authorization")
+        }
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw DSHClientError.invalidResponse("认证没有 HTTP 响应")
+        }
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            throw DSHClientError.httpStatus(httpResponse.statusCode, "认证失败")
+        }
+        for case let (key, value) in httpResponse.allHeaderFields as! [String: String] {
+            if key.lowercased() == "set-cookie" {
+                authCookie = value.split(separator: ";").first.map(String.init)
+                break
+            }
+        }
+        if authCookie == nil {
+            let body = String(data: data.prefix(200), encoding: .utf8) ?? ""
+            throw DSHClientError.invalidResponse("认证未返回 Cookie（HTTP \(httpResponse.statusCode)）：\(body)")
+        }
     }
 
     func call(
@@ -93,7 +122,13 @@ final class DSHAPIClient: @unchecked Sendable {
             throw DSHClientError.httpStatus(httpResponse.statusCode, body)
         }
 
-        let envelope = try JSONDecoder().decode(DSHRPCResponse.self, from: data)
+        let envelope: DSHRPCResponse
+        do {
+            envelope = try JSONDecoder().decode(DSHRPCResponse.self, from: data)
+        } catch {
+            let body = String(data: data.prefix(500), encoding: .utf8) ?? ""
+            throw DSHClientError.invalidResponse("JSON 解析失败（HTTP \(httpResponse.statusCode)）：\(body)")
+        }
         guard envelope.type == "server-response", envelope.rpcId == rpcId else {
             throw DSHClientError.invalidResponse("RPC 信封不匹配")
         }
@@ -249,6 +284,9 @@ final class DSHAPIClient: @unchecked Sendable {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let cookie = authCookie {
+            request.setValue(cookie, forHTTPHeaderField: "Cookie")
+        }
         if !username.isEmpty {
             let token = Data("\(username):\(password)".utf8).base64EncodedString()
             request.setValue("Basic \(token)", forHTTPHeaderField: "Authorization")

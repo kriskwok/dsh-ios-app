@@ -208,6 +208,8 @@ struct ChatSessionView: View {
             case .active:
                 if viewModel.hasStarted && !viewModel.isConnected && !viewModel.isReconnecting {
                     viewModel.reconnect()
+                } else if viewModel.hasStarted && viewModel.isConnected {
+                    Task { await viewModel.loadModels() }
                 }
             case .background, .inactive:
                 showModelSelector = false

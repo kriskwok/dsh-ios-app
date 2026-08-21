@@ -214,6 +214,41 @@ actor HermesRPCClient {
         return ticket
     }
 
+    func httpGet(_ path: String, query: [String: String] = [:]) async throws -> JSONValue {
+        var url = endpoint(path)
+        if !query.isEmpty {
+            var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            components?.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) }
+            url = components?.url ?? url
+        }
+        var request = URLRequest(url: url)
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw HermesClientError.invalidResponse("HTTP 请求没有 HTTP 响应")
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            throw HermesClientError.httpStatus(http.statusCode)
+        }
+        return try JSONDecoder().decode(JSONValue.self, from: data)
+    }
+
+    func httpPut(_ path: String, body: JSONValue) async throws -> JSONValue {
+        var request = URLRequest(url: endpoint(path))
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.httpBody = try JSONEncoder().encode(body)
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw HermesClientError.invalidResponse("HTTP 请求没有 HTTP 响应")
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            throw HermesClientError.httpStatus(http.statusCode)
+        }
+        return try JSONDecoder().decode(JSONValue.self, from: data)
+    }
+
     private func endpoint(_ path: String) -> URL {
         path.split(separator: "/").reduce(baseURL) { url, part in
             url.appendingPathComponent(String(part))

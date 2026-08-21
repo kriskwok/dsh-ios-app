@@ -24,6 +24,7 @@ final class ChatSessionViewModel: ObservableObject {
 
     private var runtimeSessionID: String?
     private var storedSession: AgentSessionSummary?
+    private var contextModel: AgentModelSelection?
     private let workspace: AgentWorkspace?
     private let gateway: any AgentGateway
     private let reconnectDelay: @Sendable (Int) -> Duration
@@ -33,6 +34,7 @@ final class ChatSessionViewModel: ObservableObject {
     private var startupTask: Task<Void, Never>?
     private var toolDetails: [String: String] = [:]
     private(set) var hasStarted = false
+    private var isFetchingModels = false
 
     var pendingApproval: AgentApprovalRequest? { pendingApprovals.first }
     var pendingQuestion: AgentQuestionRequest? { pendingQuestions.first }
@@ -65,6 +67,8 @@ final class ChatSessionViewModel: ObservableObject {
     func start() {
         guard eventTask == nil, startupTask == nil else { return }
         hasStarted = true
+        modelCatalog = nil
+        isModelLoading = true
 
         eventTask = Task { [weak self] in
             await self?.observeEvents()
@@ -92,6 +96,7 @@ final class ChatSessionViewModel: ObservableObject {
                 isLoading = false
                 isConnected = false
                 isReconnecting = false
+                isModelLoading = false
                 errorMessage = error.localizedDescription
             }
             startupTask = nil
@@ -243,13 +248,13 @@ final class ChatSessionViewModel: ObservableObject {
     }
 
     var canSelectModel: Bool {
-        agentKind == .dsh
+        true
     }
 
     var currentModelDisplayName: String? {
         guard canSelectModel else { return nil }
         guard let catalog = modelCatalog, let selection = catalog.currentModel else { return nil }
-        if let model = catalog.allModels.first(where: { $0.providerID == selection.providerID && $0.id == selection.modelID }) {
+        if let model = catalog.selectedModel {
             return model.displayName
         }
         return selection.modelID
@@ -260,17 +265,52 @@ final class ChatSessionViewModel: ObservableObject {
         return catalog.isAvailable(selection)
     }
 
+    /// Reconciles the session's stored model selection with the fetched catalog.
+    /// The stored selection (from session resume) can carry a provider that does
+    /// not match the options list (often empty or a different slug), which makes
+    /// the picker report the current model as unavailable even though it is listed.
+    /// Fall back to matching by model id so the real model can be located.
+    private func resolveCurrentModel(_ stored: AgentModelSelection?, fallback: AgentModelSelection?, in catalog: AgentModelCatalog) -> AgentModelSelection? {
+        if let selection = stored, catalog.isAvailable(selection) { return selection }
+        if let selection = stored,
+           let model = catalog.allModels.first(where: { $0.id.lowercased() == selection.modelID.lowercased() }) {
+            return AgentModelSelection(providerID: model.providerID, modelID: model.id, reasoningLevel: selection.reasoningLevel)
+        }
+        if let selection = fallback, catalog.isAvailable(selection) { return selection }
+        return stored ?? fallback
+    }
+
     func loadModels() async {
-        guard canSelectModel, let sessionID = runtimeSessionID ?? storedSession?.id else { return }
-        guard !isModelLoading else { return }
-        isModelLoading = true
+        guard canSelectModel else { return }
+        // Drop overlapping requests: a foreground return can fire while the
+        // initial load (or a previous refresh) is still in flight.
+        guard !isFetchingModels else { return }
+        guard let sessionID = runtimeSessionID ?? storedSession?.id else { return }
+
+        // Keep the previously loaded list during background refreshes so the
+        // picker never regresses to a spinner on every foreground return.
+        let silent = modelCatalog != nil
+        isFetchingModels = true
+        if !silent { isModelLoading = true }
+        defer {
+            isFetchingModels = false
+            if !silent { isModelLoading = false }
+        }
         do {
             let catalog = try await gateway.fetchModels(sessionID: sessionID)
-            modelCatalog = catalog
+            let current = resolveCurrentModel(contextModel, fallback: catalog.currentModel, in: catalog)
+            modelCatalog = AgentModelCatalog(
+                groups: catalog.groups,
+                currentModel: current,
+                currentReasoningLevel: catalog.currentReasoningLevel,
+                reasoningLevels: catalog.reasoningLevels,
+                supportsReasoningLevel: catalog.supportsReasoningLevel
+            )
         } catch {
-            errorMessage = error.localizedDescription
+            // Only surface errors on the blocking first load; keep the prior
+            // catalog intact when a background refresh fails.
+            if !silent { errorMessage = error.localizedDescription }
         }
-        isModelLoading = false
     }
 
     func selectModel(_ model: AgentModel) async {
@@ -278,7 +318,12 @@ final class ChatSessionViewModel: ObservableObject {
         guard !isModelSelecting else { return }
         isModelSelecting = true
         errorMessage = nil
-        let reasoningLevel = model.isDeepSeek ? (modelCatalog?.currentReasoningLevel ?? .high) : nil
+        let reasoningLevel: ReasoningLevel? = {
+            guard model.supportsReasoningLevel else { return nil }
+            let current = modelCatalog?.currentReasoningLevel ?? modelCatalog?.currentModel?.reasoningLevel
+            if let current, model.reasoningLevels.contains(current) { return current }
+            return model.defaultReasoningLevel ?? model.reasoningLevels.first
+        }()
         let selection = AgentModelSelection(providerID: model.providerID, modelID: model.id, reasoningLevel: reasoningLevel)
         do {
             let confirmed = try await gateway.selectModel(selection, sessionID: sessionID)
@@ -286,7 +331,8 @@ final class ChatSessionViewModel: ObservableObject {
                 modelCatalog = AgentModelCatalog(
                     groups: catalog.groups,
                     currentModel: confirmed ?? selection,
-                    currentReasoningLevel: confirmed?.reasoningLevel ?? reasoningLevel
+                    currentReasoningLevel: confirmed?.reasoningLevel ?? reasoningLevel,
+                    reasoningLevels: catalog.reasoningLevels
                 )
             }
         } catch {
@@ -315,7 +361,8 @@ final class ChatSessionViewModel: ObservableObject {
                     modelID: current.modelID,
                     reasoningLevel: confirmed?.reasoningLevel ?? level
                 ),
-                currentReasoningLevel: confirmed?.reasoningLevel ?? level
+                currentReasoningLevel: confirmed?.reasoningLevel ?? level,
+                reasoningLevels: catalog.reasoningLevels
             )
         } catch {
             errorMessage = error.localizedDescription
@@ -329,6 +376,7 @@ final class ChatSessionViewModel: ObservableObject {
         title = context.title
         isRunning = context.isRunning
         isLoading = false
+        contextModel = context.currentModel
         if !preservingMessages {
             messages = context.messages
         }

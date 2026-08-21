@@ -346,6 +346,7 @@ struct ConversationDrawerView: View {
                 Text(session.title)
                     .font(.callout)
                     .lineLimit(1)
+                if session.modelProvider == "openai" { Text("openai").font(.system(size: 9, weight: .semibold, design: .monospaced)).foregroundStyle(.white).padding(.horizontal, 5).padding(.vertical, 2).background(Color.blue, in: Capsule()).fixedSize() }
                 Spacer(minLength: 4)
                 Text(SessionTimestampFormatter.string(for: session.updatedAt))
                     .font(.caption2.monospacedDigit())

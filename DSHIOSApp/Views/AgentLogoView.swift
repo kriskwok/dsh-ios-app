@@ -20,6 +20,13 @@ struct AgentLogoView: View {
                 Image("HermesLogo")
                     .resizable()
                     .scaledToFill()
+            case .codex:
+                Image("ChatGPTLogo")
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .foregroundStyle(colorScheme == .dark ? .white : .black)
+                    .padding(size * 0.10)
             }
         }
         .frame(width: size, height: size)

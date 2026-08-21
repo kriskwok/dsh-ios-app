@@ -54,6 +54,25 @@ final class HermesAgentGateway: AgentGateway, @unchecked Sendable {
             }
         }
 
+        // Coding agent sessions live outside projects.tree; collect them from session.list
+        let codingAgentSessions = sessionsByID.values.filter {
+            $0.source == "coding_agent" || $0.channel.title.lowercased().contains("coding")
+        }
+        if !codingAgentSessions.isEmpty {
+            let caWorkspace = AgentWorkspace(
+                id: "__coding_agent__",
+                path: "",
+                title: "CODING AGENT",
+                sessionIDs: codingAgentSessions.map(\.id).sorted()
+            )
+            // Insert second-to-last
+            if workspaces.count >= 1 {
+                workspaces.insert(caWorkspace, at: max(workspaces.count - 1, 0))
+            } else {
+                workspaces.append(caWorkspace)
+            }
+        }
+
         return AgentNavigationSnapshot(
             sessions: sessionsByID.values.sorted { $0.updatedAt > $1.updatedAt },
             workspaces: workspaces,
@@ -77,7 +96,8 @@ final class HermesAgentGateway: AgentGateway, @unchecked Sendable {
             title: result["info"]?["title"]?.stringValue?.nilIfEmpty
                 ?? result["title"]?.stringValue?.nilIfEmpty
                 ?? session.title,
-            isRunning: result["running"]?.boolValue ?? false
+            isRunning: result["running"]?.boolValue ?? false,
+            currentModel: Self.extractModel(from: result)
         )
     }
 
@@ -101,7 +121,22 @@ final class HermesAgentGateway: AgentGateway, @unchecked Sendable {
             session: session,
             messages: Self.messages(from: result["messages"]),
             title: "新对话",
-            isRunning: false
+            isRunning: false,
+            currentModel: Self.extractModel(from: result)
+        )
+    }
+
+    private static func extractModel(from result: JSONValue) -> AgentModelSelection? {
+        let info = result["info"] ?? .object([:])
+        let model = result["model"]?.stringValue?.nilIfEmpty
+            ?? info["model"]?.stringValue?.nilIfEmpty
+        let provider = result["provider"]?.stringValue?.nilIfEmpty
+            ?? info["provider"]?.stringValue?.nilIfEmpty
+        guard let model, !model.isEmpty else { return nil }
+        return AgentModelSelection(
+            providerID: provider ?? "",
+            modelID: model,
+            reasoningLevel: nil
         )
     }
 
@@ -154,12 +189,58 @@ final class HermesAgentGateway: AgentGateway, @unchecked Sendable {
         Task { await client.close() }
     }
 
+    private static let hiddenProviderSlugs: Set<String> = ["nous_portal", "nous-portal", "nousportal"]
+    private static let hiddenProviderNames: Set<String> = ["nous portal", "mixture of agents"]
+
     func fetchModels(sessionID: String) async throws -> AgentModelCatalog {
-        AgentModelCatalog(groups: [], currentModel: nil)
+        try await client.connect()
+        let result = try await client.call(
+            method: "model.options",
+            params: ["session_id": .string(sessionID)]
+        )
+        let currentProvider = result["provider"]?.stringValue ?? ""
+        let currentModel = result["model"]?.stringValue ?? ""
+
+
+        let groups: [AgentModelGroup] = (result["providers"]?.arrayValue ?? []).compactMap { raw in
+            guard let slug = raw["slug"]?.stringValue, !slug.isEmpty else { return nil }
+            if Self.hiddenProviderSlugs.contains(slug) { return nil }
+            let name = raw["name"]?.stringValue ?? slug
+            let lowerName = name.lowercased()
+            if Self.hiddenProviderNames.contains(where: { lowerName.contains($0) }) { return nil }
+            let isUserDefined = raw["is_user_defined"]?.boolValue ?? false
+            var modelIDs = raw["models"]?.arrayValue?.compactMap { $0.stringValue } ?? []
+            if lowerName.contains("opencode zen") {
+                modelIDs = modelIDs.filter { $0.lowercased().contains("free") }
+            }
+            guard !modelIDs.isEmpty else { return nil }
+            let models = modelIDs.map { modelID in
+                AgentModel(
+                    id: modelID,
+                    name: modelID,
+                    providerID: slug,
+                    providerName: name,
+                    isOfficial: !isUserDefined,
+                    description: nil,
+                    reasoningLevels: []
+                )
+            }
+            return AgentModelGroup(id: slug, name: name, isOfficial: !isUserDefined, models: models)
+        }
+        let current: AgentModelSelection? = {
+            guard !currentProvider.isEmpty, !currentModel.isEmpty else { return nil }
+            return AgentModelSelection(providerID: currentProvider, modelID: currentModel, reasoningLevel: nil)
+        }()
+        return AgentModelCatalog(groups: groups, currentModel: current, currentReasoningLevel: nil, reasoningLevels: nil, supportsReasoningLevel: false)
     }
 
     func selectModel(_ selection: AgentModelSelection, sessionID: String) async throws -> AgentModelSelection? {
-        nil
+        let command = "/model \(selection.modelID) --provider \(selection.providerID) --session"
+        _ = try? await client.call(
+            method: "slash.exec",
+            params: ["session_id": .string(sessionID), "command": .string(command)]
+        )
+        return selection
     }
 
     static func map(_ event: HermesGatewayEvent) -> [AgentGatewayEvent] {

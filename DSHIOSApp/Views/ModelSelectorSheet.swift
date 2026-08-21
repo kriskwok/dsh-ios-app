@@ -23,7 +23,9 @@ struct ModelSelectorPopover: View {
 
     private func isSelected(_ model: AgentModel) -> Bool {
         guard let selection = currentSelection else { return false }
-        return model.providerID == selection.providerID && model.id == selection.modelID
+        if model.providerID == selection.providerID && model.id == selection.modelID { return true }
+        return model.providerID.lowercased() == selection.providerID.lowercased()
+            && model.id.lowercased() == selection.modelID.lowercased()
     }
 
     var body: some View {
@@ -33,7 +35,7 @@ struct ModelSelectorPopover: View {
             } else if let catalog, catalog.isEmpty {
                 emptyView
             } else {
-                if let selection = currentSelection, !catalog!.isAvailable(selection) {
+                if let selection = currentSelection, !viewModel.isCurrentModelAvailable {
                     deletedModelBanner(selection: selection)
                 }
                 ScrollView {
@@ -61,7 +63,13 @@ struct ModelSelectorPopover: View {
     }
 
     private var currentReasoningLevel: ReasoningLevel {
-        catalog?.currentReasoningLevel ?? currentSelection?.reasoningLevel ?? .high
+        if let displayed = catalog?.displayedReasoningLevel { return displayed }
+        return catalog?.currentReasoningLevel ?? currentSelection?.reasoningLevel ?? .high
+    }
+
+    private var availableReasoningLevels: [ReasoningLevel] {
+        guard let levels = catalog?.availableReasoningLevels, !levels.isEmpty else { return [] }
+        return levels
     }
 
     private var reasoningLevelBar: some View {
@@ -72,7 +80,7 @@ struct ModelSelectorPopover: View {
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 14)
-                ReasoningSlider(level: currentReasoningLevel) { newLevel in
+                ReasoningSlider(level: currentReasoningLevel, levels: availableReasoningLevels) { newLevel in
                     Task { await viewModel.selectReasoningLevel(newLevel) }
                 }
                 .disabled(viewModel.isModelSelecting)
@@ -184,27 +192,50 @@ struct ModelSelectorPopover: View {
 
 private struct ReasoningSlider: View {
     let level: ReasoningLevel
+    let levels: [ReasoningLevel]
     let onChange: (ReasoningLevel) -> Void
 
     @State private var dragOffset: CGFloat?
 
-    private var levels: [ReasoningLevel] { ReasoningLevel.allCases }
-    private var index: Int { levels.firstIndex(of: level) ?? 2 }
-    private var segmentCount: Int { levels.count }
-    private var progress: CGFloat { CGFloat(index) / CGFloat(segmentCount - 1) }
-
-    private var gradient: LinearGradient {
-        switch level {
-        case .off:
-            return LinearGradient(colors: [Color.secondary.opacity(0.3)], startPoint: .leading, endPoint: .trailing)
-        case .low:
-            return LinearGradient(colors: [Color(red: 0.25, green: 0.5, blue: 0.85).opacity(0.6), Color(red: 0.15, green: 0.4, blue: 0.95)], startPoint: .leading, endPoint: .trailing)
-        case .high:
-            return LinearGradient(colors: [Color(red: 0.85, green: 0.45, blue: 0.15).opacity(0.6), Color(red: 0.95, green: 0.55, blue: 0.0)], startPoint: .leading, endPoint: .trailing)
-        case .max:
-            return LinearGradient(colors: [Color(red: 0.55, green: 0.2, blue: 0.85).opacity(0.6), Color(red: 0.65, green: 0.15, blue: 0.95)], startPoint: .leading, endPoint: .trailing)
-        }
+    private var index: Int { levels.firstIndex(of: level) ?? 0 }
+    private var segmentCount: Int { max(levels.count, 1) }
+    private var progress: CGFloat {
+        segmentCount <= 1 ? 0 : CGFloat(index) / CGFloat(segmentCount - 1)
     }
+
+    private func colorForProgress(_ p: CGFloat) -> Color {
+        let stops: [(CGFloat, Color)] = [
+            (0.0, Color.secondary.opacity(0.4)),
+            (0.33, Color(red: 0.15, green: 0.4, blue: 0.95)),
+            (0.66, Color(red: 0.95, green: 0.55, blue: 0.0)),
+            (1.0, Color(red: 0.65, green: 0.15, blue: 0.95))
+        ]
+        if p <= 0 { return stops[0].1 }
+        if p >= 1 { return stops.last!.1 }
+        for i in 0..<(stops.count - 1) {
+            if p >= stops[i].0 && p <= stops[i + 1].0 {
+                let t = (p - stops[i].0) / (stops[i + 1].0 - stops[i].0)
+                return blend(stops[i].1, stops[i + 1].1, t)
+            }
+        }
+        return stops.last!.1
+    }
+
+    private func blend(_ a: Color, _ b: Color, _ t: CGFloat) -> Color {
+        let ua = UIColor(a), ub = UIColor(b)
+        var r1: CGFloat = 0, g1: CGFloat = 0, b1: CGFloat = 0, a1: CGFloat = 0
+        var r2: CGFloat = 0, g2: CGFloat = 0, b2: CGFloat = 0, a2: CGFloat = 0
+        ua.getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
+        ub.getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
+        return Color(
+            red: Double(r1 + (r2 - r1) * t),
+            green: Double(g1 + (g2 - g1) * t),
+            blue: Double(b1 + (b2 - b1) * t)
+        )
+    }
+
+    private var fillColor: Color { colorForProgress(progress) }
+    private var labelColor: Color { fillColor }
 
     var body: some View {
         GeometryReader { geo in
@@ -218,7 +249,7 @@ private struct ReasoningSlider: View {
                         .frame(height: trackHeight)
 
                     Capsule()
-                        .fill(gradient)
+                        .fill(fillColor)
                         .frame(width: max(0, geo.size.width * progress), height: trackHeight)
 
                     Circle()
@@ -234,7 +265,7 @@ private struct ReasoningSlider: View {
                                     let newIndex = Int(round(clamped * CGFloat(segmentCount - 1)))
                                     let newLevel = levels[min(newIndex, segmentCount - 1)]
                                     if newLevel != level {
-                        onChange(newLevel)
+                                        onChange(newLevel)
                                     }
                                 }
                                 .onEnded { _ in
@@ -249,21 +280,12 @@ private struct ReasoningSlider: View {
                     ForEach(levels, id: \.self) { lvl in
                         Text(lvl.displayName)
                             .font(.system(size: 10, weight: lvl == level ? .bold : .medium))
-                            .foregroundStyle(lvl == level ? gradientFrameColor : .secondary)
+                            .foregroundStyle(lvl == level ? labelColor : .secondary)
                             .frame(width: labelWidth)
                     }
                 }
             }
         }
         .frame(height: 48)
-    }
-
-    private var gradientFrameColor: Color {
-        switch level {
-        case .off: return .secondary
-        case .low: return Color(red: 0.15, green: 0.4, blue: 0.95)
-        case .high: return Color(red: 0.95, green: 0.55, blue: 0.0)
-        case .max: return Color(red: 0.65, green: 0.15, blue: 0.95)
-        }
     }
 }

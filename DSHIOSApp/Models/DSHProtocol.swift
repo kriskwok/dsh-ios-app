@@ -220,15 +220,14 @@ struct DSHWorkspace: Identifiable, Hashable, Sendable {
         guard
             let id = json["workspaceId"]?.stringValue,
             let path = json["path"]?.stringValue,
-            let title = json["title"]?.stringValue,
-            let rawSessionIDs = json["sessionIds"]?.arrayValue
+            let title = json["title"]?.stringValue
         else {
             throw DSHClientError.invalidResponse("工作区缺少必要字段")
         }
         self.id = id
         self.path = path
         self.title = title
-        self.sessionIDs = rawSessionIDs.compactMap(\.stringValue)
+        self.sessionIDs = json["sessionIds"]?.arrayValue?.compactMap(\.stringValue) ?? []
     }
 }
 

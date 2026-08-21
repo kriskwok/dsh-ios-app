@@ -23,15 +23,24 @@ final class AppShellViewModel: ObservableObject {
 
     private var gateway: (any AgentGateway)?
     private var serverKind: AgentServerKind?
+    private var currentProfileID: UUID?
 
     func configure(profile: ServerProfile, password: String) async {
         gateway?.close()
         gateway = AgentGatewayFactory.make(profile: profile, password: password)
         serverKind = profile.kind
-        sessions = []
-        workspaces = []
-        archivedSessionIDs = []
+        currentProfileID = profile.id
         errorMessage = nil
+
+        if let cached = Self.loadCache(profileID: profile.id) {
+            sessions = cached.sessions.sorted(by: AgentSessionOrdering.newestFirst)
+            workspaces = cached.workspaces
+            archivedSessionIDs = cached.archivedSessionIDs
+        } else {
+            sessions = []
+            workspaces = []
+            archivedSessionIDs = []
+        }
         target = ConversationTarget()
         await load()
     }
@@ -41,12 +50,18 @@ final class AppShellViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
 
+        let hasCachedData = !sessions.isEmpty
+
         do {
             let snapshot = try await gateway.navigation()
             sessions = snapshot.sessions.sorted(by: AgentSessionOrdering.newestFirst)
             workspaces = snapshot.workspaces
             archivedSessionIDs = snapshot.archivedSessionIDs
             errorMessage = nil
+
+            if let pid = currentProfileID {
+                Self.saveCache(profileID: pid, snapshot: snapshot)
+            }
 
             if let currentID = target.session?.id,
                let refreshed = sessions.first(where: { $0.id == currentID }) {
@@ -56,8 +71,12 @@ final class AppShellViewModel: ObservableObject {
                       let defaultWorkspaceID {
                 target = ConversationTarget(workspaceID: defaultWorkspaceID)
             }
+        } catch is CancellationError {
+        } catch let error as URLError where error.code == .cancelled {
         } catch {
-            errorMessage = error.localizedDescription
+            if !hasCachedData {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 
@@ -80,8 +99,16 @@ final class AppShellViewModel: ObservableObject {
     }
 
     private var defaultWorkspaceID: String? {
-        guard serverKind == .dsh else { return nil }
-        return AgentWorkspaceSelection.defaultDSHWorkspaceID(in: workspaces)
+        switch serverKind {
+        case .dsh:
+            return AgentWorkspaceSelection.defaultDSHWorkspaceID(in: workspaces)
+        case .codex:
+            return workspaces.first { $0.path == CodexAgentGateway.defaultWorkspacePath }?.id
+        case .hermes:
+            return nil
+        case nil:
+            return nil
+        }
     }
 
     func attachCreatedSession(_ session: AgentSessionSummary, to targetID: UUID) {
@@ -114,7 +141,7 @@ final class AppShellViewModel: ObservableObject {
 
     func sessions(in workspace: AgentWorkspace) -> [AgentSessionSummary] {
         workspace.sessionIDs.compactMap { id in
-            sessions.first { $0.id == id && !$0.isBlank && !archivedSessionIDs.contains($0.id) }
+            sessions.first { $0.id == id && (serverKind == .codex || !$0.isBlank) && !archivedSessionIDs.contains($0.id) }
         }
         .sorted(by: AgentSessionOrdering.newestFirst)
     }
@@ -122,8 +149,27 @@ final class AppShellViewModel: ObservableObject {
     var ungroupedSessions: [AgentSessionSummary] {
         let groupedIDs = Set(workspaces.flatMap(\.sessionIDs))
         return sessions.filter {
-            !$0.isBlank && !archivedSessionIDs.contains($0.id) && !groupedIDs.contains($0.id)
+           (serverKind == .codex || !$0.isBlank) && !archivedSessionIDs.contains($0.id) && !groupedIDs.contains($0.id)
         }
         .sorted(by: AgentSessionOrdering.newestFirst)
+    }
+
+    private static func cacheFileURL(profileID: UUID) -> URL {
+        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("session_cache", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("\(profileID.uuidString).json")
+    }
+
+    private static func loadCache(profileID: UUID) -> AgentNavigationSnapshot? {
+        let url = cacheFileURL(profileID: profileID)
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode(AgentNavigationSnapshot.self, from: data)
+    }
+
+    private static func saveCache(profileID: UUID, snapshot: AgentNavigationSnapshot) {
+        let url = cacheFileURL(profileID: profileID)
+        guard let data = try? JSONEncoder().encode(snapshot) else { return }
+        try? data.write(to: url, options: .atomic)
     }
 }

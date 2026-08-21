@@ -7,7 +7,8 @@ enum AgentGatewayFactory {
             return DSHAgentGateway(profile: profile, password: password)
         case .hermes:
             return HermesAgentGateway(profile: profile, password: password)
+        case .codex:
+            return CodexAgentGateway(profile: profile, password: password)
         }
     }
 }
-

@@ -7,27 +7,26 @@ final class DSHAgentGateway: AgentGateway, @unchecked Sendable {
         client = DSHAPIClient(profile: profile, password: password)
     }
 
-    func connect() async throws {}
+    func connect() async throws {
+        try await client.authenticate()
+    }
 
     func navigation() async throws -> AgentNavigationSnapshot {
+        try await connect()
         let sessionResult = try await client.call(method: "session.list")
         let rawSessions = sessionResult.value["items"]?.arrayValue ?? []
         let dshSessions = try rawSessions.map(DSHSessionSummary.init(json:))
         let sessions = dshSessions.map(Self.agentSession).sorted { $0.updatedAt > $1.updatedAt }
 
-        do {
-            let workspaceResult = try await client.call(method: "workspace.list")
-            let list = try DSHWorkspaceList(json: workspaceResult.value)
-            return AgentNavigationSnapshot(
-                sessions: sessions,
-                workspaces: list.items.map {
-                    AgentWorkspace(id: $0.id, path: $0.path, title: $0.title, sessionIDs: $0.sessionIDs)
-                },
-                archivedSessionIDs: list.archivedSessionIDs
-            )
-        } catch {
-            return AgentNavigationSnapshot(sessions: sessions, workspaces: [], archivedSessionIDs: [])
-        }
+        let workspaceResult = try await client.call(method: "workspace.list")
+        let list = try DSHWorkspaceList(json: workspaceResult.value)
+        return AgentNavigationSnapshot(
+            sessions: sessions,
+            workspaces: list.items.map {
+                AgentWorkspace(id: $0.id, path: $0.path, title: $0.title, sessionIDs: $0.sessionIDs)
+            },
+            archivedSessionIDs: list.archivedSessionIDs
+        )
     }
 
     func openSession(_ session: AgentSessionSummary) async throws -> AgentConversationContext {
@@ -43,7 +42,8 @@ final class DSHAgentGateway: AgentGateway, @unchecked Sendable {
             session: session,
             messages: projector.messages(),
             title: history.title?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? session.title,
-            isRunning: Self.runningState(from: history.events, fallback: session.isRunning)
+            isRunning: Self.runningState(from: history.events, fallback: session.isRunning),
+            currentModel: nil
         )
     }
 
@@ -64,7 +64,8 @@ final class DSHAgentGateway: AgentGateway, @unchecked Sendable {
             session: session,
             messages: [],
             title: "新对话",
-            isRunning: false
+            isRunning: false,
+            currentModel: nil
         )
     }
 
@@ -186,24 +187,58 @@ final class DSHAgentGateway: AgentGateway, @unchecked Sendable {
         }()
         let reasoningLevel = ReasoningLevel(rawValue: value["current"]?["reasoningEffort"]?.stringValue ?? "")
             ?? current?.reasoningLevel
-        let groups = (value["groups"]?.arrayValue ?? []).compactMap { rawGroup -> AgentModelGroup? in
-            guard let groupID = rawGroup["id"]?.stringValue else { return nil }
+        let reasoningLevels: [ReasoningLevel]? = {
+            guard let rawLevels = value["reasoningLevels"]?.arrayValue else { return nil }
+            let levels = rawLevels.compactMap { ReasoningLevel(rawValue: $0.stringValue ?? "") }
+            return levels.isEmpty ? nil : levels
+        }()
+        var mergedGroups: [String: AgentModelGroup] = [:]
+        var groupOrder: [String] = []
+        for rawGroup in value["groups"]?.arrayValue ?? [] {
+            guard let groupID = rawGroup["id"]?.stringValue else { continue }
             let groupName = rawGroup["name"]?.stringValue ?? groupID
             let isOfficial = rawGroup["official"]?.boolValue ?? false
             let models = (rawGroup["models"]?.arrayValue ?? []).compactMap { rawModel -> AgentModel? in
                 guard let modelID = rawModel["id"]?.stringValue else { return nil }
+                let modelLevels = Self.parseReasoningLevels(rawModel["reasoning"]?["efforts"])
+                let defaultLevel = rawModel["reasoning"]?["defaultEffort"]?.stringValue
+                    .flatMap(ReasoningLevel.init)
                 return AgentModel(
                     id: modelID,
                     name: rawModel["name"]?.stringValue ?? modelID,
                     providerID: groupID,
                     providerName: groupName,
                     isOfficial: isOfficial,
-                    description: rawModel["description"]?.stringValue?.nilIfEmpty
+                    description: rawModel["description"]?.stringValue?.nilIfEmpty,
+                    reasoningLevels: modelLevels,
+                    defaultReasoningLevel: defaultLevel
                 )
             }
-            return AgentModelGroup(id: groupID, name: groupName, isOfficial: isOfficial, models: models)
+            if let existing = mergedGroups[groupID] {
+                mergedGroups[groupID] = AgentModelGroup(
+                    id: groupID,
+                    name: existing.name,
+                    isOfficial: existing.isOfficial || isOfficial,
+                    models: existing.models + models
+                )
+            } else {
+                groupOrder.append(groupID)
+                mergedGroups[groupID] = AgentModelGroup(id: groupID, name: groupName, isOfficial: isOfficial, models: models)
+            }
         }
-        return AgentModelCatalog(groups: groups, currentModel: current, currentReasoningLevel: reasoningLevel)
+        let groups = groupOrder.compactMap { mergedGroups[$0] }
+        return AgentModelCatalog(groups: groups, currentModel: current, currentReasoningLevel: reasoningLevel, reasoningLevels: reasoningLevels)
+    }
+
+    static func parseReasoningLevels(_ value: JSONValue?) -> [ReasoningLevel] {
+        guard let array = value?.arrayValue, !array.isEmpty else { return [] }
+        return array.compactMap { item in
+            if let str = item.stringValue { return ReasoningLevel(rawValue: str) }
+            if let effort = item["reasoningEffort"]?.stringValue { return ReasoningLevel(rawValue: effort) }
+            if let effort = item["effort"]?.stringValue { return ReasoningLevel(rawValue: effort) }
+            if let id = item["id"]?.stringValue { return ReasoningLevel(rawValue: id) }
+            return nil
+        }
     }
 
     func selectModel(_ selection: AgentModelSelection, sessionID: String) async throws -> AgentModelSelection? {

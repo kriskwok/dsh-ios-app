@@ -96,11 +96,19 @@ struct ServerEditorView: View {
     }
 
     private var addressPlaceholder: String {
-        kind == .dsh ? "https://dsh.example.com" : "https://hermes.example.com"
+        switch kind {
+        case .dsh: return "https://dsh.example.com"
+        case .hermes: return "https://hermes.example.com"
+        case .codex: return "https://codex.example.com:4501"
+        }
     }
 
     private var authTitle: String {
-        kind == .dsh ? "HTTP Basic Auth（可选）" : "Hermes 登录"
+        switch kind {
+        case .dsh: return "HTTP Basic Auth（可选）"
+        case .hermes: return "Hermes 登录"
+        case .codex: return "Codex 登录"
+        }
     }
 
     private var authFooter: String {
@@ -109,6 +117,8 @@ struct ServerEditorView: View {
             return "密码只保存在本机钥匙串，不写入服务器列表或日志。"
         case .hermes:
             return "新版 Hermes 会打开系统登录页并使用官方 OAuth，令牌只保存在本机钥匙串。用户名和密码仅用于兼容旧版 Basic Auth，可留空。"
+        case .codex:
+            return "用户名和密码用于反代 Cookie 登录；若服务端使用 ws-auth，则把密码填为 Capability Token 即可，Cookie 会保存在系统 Cookie 存储中。"
         }
     }
 }

@@ -92,7 +92,7 @@ extension ServerProfile {
         }
 
         let path = components.percentEncodedPath
-        guard (kind == .hermes || path.isEmpty || path == "/"),
+        guard (kind == .hermes || kind == .codex || path.isEmpty || path == "/"),
               components.query == nil,
               components.fragment == nil,
               components.user == nil,
@@ -106,7 +106,9 @@ extension ServerProfile {
 
         components.scheme = scheme
         components.host = host
-        components.path = kind == .dsh ? "" : path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).nilIfEmpty.map { "/\($0)" } ?? ""
+        components.path = (kind == .dsh || kind == .codex)
+            ? ""
+            : path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).nilIfEmpty.map { "/\($0)" } ?? ""
         guard let url = components.url else { throw ValidationError.invalidURL }
 
         return ServerProfile(
@@ -126,5 +128,4 @@ extension ServerProfile {
             || !host.contains(".")
     }
 }
-
 

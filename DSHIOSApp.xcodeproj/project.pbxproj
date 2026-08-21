@@ -7,9 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B1A57E5F3C8D4F0B8E65C2F1 /* CodexAgentGateway.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5E5A4C63F11A7D8E2B23F71 /* CodexAgentGateway.swift */; };
 		126FEE1A63FE62C73A1940FD /* AgentGatewayFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37DCC07F7663940E44AEDD0C /* AgentGatewayFactory.swift */; };
 		1648E5841353888D82FE92A4 /* DSHUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = F610C8B9ABF35500CF6D1C7F /* DSHUI.swift */; };
 		173DB28E9891AEAD5E2D157D /* ApprovalComposerPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07FEC6CA6234E827364AD3FE /* ApprovalComposerPanel.swift */; };
+		FC39E4D0B7A6F2C9D0A31B76 /* CodexProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6C1E4F2A8B3C0D1E2F3A4B5 /* CodexProtocolTests.swift */; };
 		1A9C871D62CAB45074A23DB6 /* ServerProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 078CD723F432C48D027D5BFC /* ServerProfile.swift */; };
 		29CDD9C964ACB6E0E5B72EB6 /* HermesRPCClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2B34713BA54740F8065070F /* HermesRPCClient.swift */; };
 		39D8329E99AF2ED1ED7B505E /* DSHProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FC0B2FF0C80CC0A34880ABC /* DSHProtocol.swift */; };
@@ -46,6 +48,7 @@
 		B3F98F3039A5E3B9D261CB23 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 954EDDA2CA845A22B23D95A9 /* Assets.xcassets */; };
 		B4932B17E50F80F264EAD70D /* ChatComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 094FA1D5FE744666A0F35A3E /* ChatComponents.swift */; };
 		B5BCFE7294E96F2D1A4868D7 /* HermesNativeAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = E947F2967B77A4CEEF758530 /* HermesNativeAuth.swift */; };
+		83F629A213CF4A6B92D1539B /* CodexRPCClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E1D33D2A8F5C847B7D0191C /* CodexRPCClient.swift */; };
 		C66BE4117994F0352C04E5FA /* AppShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC891C3FA02242720F7CF772 /* AppShellView.swift */; };
 		D017102252482EBE6160425B /* ChatSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C53441ABF56517F86A81B720 /* ChatSessionView.swift */; };
 		D2DADFB2AF5DB2301E61DB84 /* DSHUIChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E78AF8268D0AE6905C261B40 /* DSHUIChartView.swift */; };
@@ -85,11 +88,13 @@
 		177CD9705D8BB8F02DF15BCA /* AgentModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentModel.swift; sourceTree = "<group>"; };
 		18F6A6F24B400F04531854E1 /* AgentModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentModels.swift; sourceTree = "<group>"; };
 		1ADCB9A18E916D5B4E09F01A /* AgentLogoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLogoView.swift; sourceTree = "<group>"; };
+		D6C1E4F2A8B3C0D1E2F3A4B5 /* CodexProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexProtocolTests.swift; sourceTree = "<group>"; };
 		37DCC07F7663940E44AEDD0C /* AgentGatewayFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentGatewayFactory.swift; sourceTree = "<group>"; };
 		39FA17ADC2882DEBF03D43A1 /* DSHUIHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DSHUIHelpers.swift; sourceTree = "<group>"; };
 		3D3C596B17CEEFCAC2E38F9D /* DSHUIView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DSHUIView.swift; sourceTree = "<group>"; };
 		3E5EFF1CA6C7C462C5F3270E /* ServerProfileTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerProfileTests.swift; sourceTree = "<group>"; };
 		41E8D9228E3CEEFA5AC184ED /* DSHProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DSHProtocolTests.swift; sourceTree = "<group>"; };
+		C5E5A4C63F11A7D8E2B23F71 /* CodexAgentGateway.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexAgentGateway.swift; sourceTree = "<group>"; };
 		4D1D235C6C4D0664C3F47D01 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		510655F0FC73CB1DD3722AC0 /* DSHAgentGateway.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DSHAgentGateway.swift; sourceTree = "<group>"; };
 		5FC0B2FF0C80CC0A34880ABC /* DSHProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DSHProtocol.swift; sourceTree = "<group>"; };
@@ -100,6 +105,7 @@
 		8383ABA235C61A549440F770 /* QuestionComposerPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuestionComposerPanel.swift; sourceTree = "<group>"; };
 		87299DB618F630998A7669E8 /* DSHUIGroupViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DSHUIGroupViews.swift; sourceTree = "<group>"; };
 		88570BB995AC2745DB8C60F5 /* DSHIOSAppUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = DSHIOSAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		6E1D33D2A8F5C847B7D0191C /* CodexRPCClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexRPCClient.swift; sourceTree = "<group>"; };
 		954EDDA2CA845A22B23D95A9 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		9E2F5C39CAF5D1AE44C52F99 /* AppThemeMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppThemeMode.swift; sourceTree = "<group>"; };
 		9E35126D2D7C84010D0F1662 /* EmptyChatHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyChatHomeView.swift; sourceTree = "<group>"; };
@@ -153,6 +159,8 @@
 			isa = PBXGroup;
 			children = (
 				37DCC07F7663940E44AEDD0C /* AgentGatewayFactory.swift */,
+				C5E5A4C63F11A7D8E2B23F71 /* CodexAgentGateway.swift */,
+				6E1D33D2A8F5C847B7D0191C /* CodexRPCClient.swift */,
 				510655F0FC73CB1DD3722AC0 /* DSHAgentGateway.swift */,
 				DC1FF8A7DB4D79915C19A97C /* DSHAPIClient.swift */,
 				14C8FF5A576FE337FCD96611 /* HermesAgentGateway.swift */,
@@ -219,6 +227,7 @@
 			children = (
 				6D53B260DE305F6E593E51B9 /* AgentPresentationTests.swift */,
 				CD2C1174D777776B17E5C4DE /* ChatSessionViewModelTests.swift */,
+				D6C1E4F2A8B3C0D1E2F3A4B5 /* CodexProtocolTests.swift */,
 				41E8D9228E3CEEFA5AC184ED /* DSHProtocolTests.swift */,
 				A7DE52579AC004626CFE7C93 /* HermesProtocolTests.swift */,
 				D3567D1DCEAD3E566E3C1085 /* KeychainStoreTests.swift */,
@@ -415,6 +424,8 @@
 				B4932B17E50F80F264EAD70D /* ChatComponents.swift in Sources */,
 				D017102252482EBE6160425B /* ChatSessionView.swift in Sources */,
 				770EB8707522C012AF0F7F40 /* ChatSessionViewModel.swift in Sources */,
+				B1A57E5F3C8D4F0B8E65C2F1 /* CodexAgentGateway.swift in Sources */,
+				83F629A213CF4A6B92D1539B /* CodexRPCClient.swift in Sources */,
 				FB0A445F545D2CC4B2D81B0E /* ConversationDrawerView.swift in Sources */,
 				7AA2DC1C103016C484C2AAEE /* ConversationMessage.swift in Sources */,
 				55F8EA342496C21074EB8D94 /* DSHAPIClient.swift in Sources */,
@@ -459,6 +470,7 @@
 			files = (
 				8115FC1F77D5F7DEBABE8F33 /* AgentPresentationTests.swift in Sources */,
 				7DB749879951BF60AB67165C /* ChatSessionViewModelTests.swift in Sources */,
+				FC39E4D0B7A6F2C9D0A31B76 /* CodexProtocolTests.swift in Sources */,
 				543979320C39BCF26237FB33 /* DSHProtocolTests.swift in Sources */,
 				70B99F1BD1DB495F0CAC3CBA /* HermesProtocolTests.swift in Sources */,
 				4173D1F8B05ABD5DE9075491 /* KeychainStoreTests.swift in Sources */,
@@ -496,7 +508,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.dsh.mobile.client;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -632,7 +644,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.dsh.mobile.client;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";

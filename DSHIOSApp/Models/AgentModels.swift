@@ -3,6 +3,7 @@ import Foundation
 enum AgentServerKind: String, Codable, CaseIterable, Identifiable, Sendable {
     case dsh
     case hermes
+    case codex
 
     var id: String { rawValue }
 
@@ -10,12 +11,12 @@ enum AgentServerKind: String, Codable, CaseIterable, Identifiable, Sendable {
         switch self {
         case .dsh: return "DSH"
         case .hermes: return "Hermes"
+        case .codex: return "Codex"
         }
     }
-
 }
 
-struct AgentSessionSummary: Identifiable, Hashable, Sendable {
+struct AgentSessionSummary: Identifiable, Hashable, Codable, Sendable {
     let id: String
     var title: String
     var updatedAt: Date
@@ -23,6 +24,7 @@ struct AgentSessionSummary: Identifiable, Hashable, Sendable {
     var isBlank: Bool
     var workingDirectory: String?
     var source: String?
+    var modelProvider: String?
 
     init(
         id: String,
@@ -31,7 +33,8 @@ struct AgentSessionSummary: Identifiable, Hashable, Sendable {
         isRunning: Bool = false,
         isBlank: Bool = false,
         workingDirectory: String? = nil,
-        source: String? = nil
+        source: String? = nil,
+        modelProvider: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -40,6 +43,7 @@ struct AgentSessionSummary: Identifiable, Hashable, Sendable {
         self.isBlank = isBlank
         self.workingDirectory = workingDirectory
         self.source = source
+        self.modelProvider = modelProvider
     }
 
     var channel: AgentSessionChannel { AgentSessionChannel(source: source) }
@@ -118,7 +122,7 @@ struct AgentSessionChannel: Identifiable, Hashable, Sendable {
     }
 }
 
-struct AgentWorkspace: Identifiable, Hashable, Sendable {
+struct AgentWorkspace: Identifiable, Hashable, Codable, Sendable {
     let id: String
     let path: String
     let title: String
@@ -138,7 +142,7 @@ enum AgentWorkspaceSelection {
     }
 }
 
-struct AgentNavigationSnapshot: Sendable {
+struct AgentNavigationSnapshot: Codable, Sendable {
     let sessions: [AgentSessionSummary]
     let workspaces: [AgentWorkspace]
     let archivedSessionIDs: Set<String>
@@ -150,6 +154,7 @@ struct AgentConversationContext: Sendable {
     let messages: [ConversationMessage]
     let title: String
     let isRunning: Bool
+    var currentModel: AgentModelSelection?
 }
 
 enum AgentApprovalChoice: String, CaseIterable, Hashable, Sendable {
