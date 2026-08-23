@@ -39,6 +39,7 @@ struct AppShellView: View {
                     sessionsForWorkspace: viewModel.sessions(in:),
                     ungroupedSessions: viewModel.ungroupedSessions,
                     selectedSessionID: viewModel.target.session?.id,
+                    pendingResponseIDs: viewModel.pendingResponseIDs,
                     isLoading: viewModel.isLoading,
                     errorMessage: viewModel.errorMessage,
                     isConnected: chatIsConnected,

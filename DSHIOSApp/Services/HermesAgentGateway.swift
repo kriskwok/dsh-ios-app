@@ -7,6 +7,8 @@ final class HermesAgentGateway: AgentGateway, @unchecked Sendable {
         client = HermesRPCClient(profile: profile, password: password)
     }
 
+
+
     func connect() async throws {
         try await client.connect()
     }
@@ -54,18 +56,36 @@ final class HermesAgentGateway: AgentGateway, @unchecked Sendable {
             }
         }
 
-        // Coding agent sessions (created via CLI/desktop with Codex etc.)
-        // are grouped separately, inserted second-to-last.
-        let codingAgentSessions = sessionsByID.values.filter { session in
-            session.source == "cli"
+        // Fetch coding agent sessions from chat-run API
+        var caSessionIDs: [String] = []
+        if let chatRuns = try? await client.httpGet("api/chat-run/runs", query: ["limit": "200"]) {
+            let runs = chatRuns["runs"]?.arrayValue ?? chatRuns["data"]?.arrayValue ?? []
+            for run in runs {
+                guard let runID = run["id"]?.stringValue ?? run["run_id"]?.stringValue else { continue }
+                caSessionIDs.append(runID)
+                let title = run["title"]?.stringValue ?? run["input"]?.stringValue ?? runID
+                let updatedAt = run["updated_at"]?.stringValue ?? run["created_at"]?.stringValue ?? ""
+                let date = ISO8601DateFormatter().date(from: updatedAt) ?? Date()
+                sessionsByID[runID] = AgentSessionSummary(
+                    id: runID,
+                    title: title,
+                    updatedAt: date,
+                    isRunning: run["status"]?.stringValue == "running",
+                    isBlank: false,
+                    workingDirectory: run["workspace"]?.stringValue,
+                    source: "coding_agent",
+                    modelProvider: run["provider"]?.stringValue
+                )
+            }
         }
-        if !codingAgentSessions.isEmpty {
+        if !caSessionIDs.isEmpty {
             let caWorkspace = AgentWorkspace(
                 id: "__coding_agent__",
                 path: "",
                 title: "CODING AGENT",
-                sessionIDs: codingAgentSessions.map(\.id)
+                sessionIDs: caSessionIDs
             )
+            // Insert second-to-last (before the last workspace group)
             if workspaces.count >= 1 {
                 workspaces.insert(caWorkspace, at: max(workspaces.count - 1, 0))
             } else {
@@ -189,8 +209,8 @@ final class HermesAgentGateway: AgentGateway, @unchecked Sendable {
         Task { await client.close() }
     }
 
-    private static let hiddenProviderSlugs: Set<String> = ["nous_portal", "nous-portal", "nousportal"]
-    private static let hiddenProviderNames: Set<String> = ["nous portal", "mixture of agents"]
+    private static let hiddenProviderSlugs: Set<String> = []
+    private static let hiddenProviderNames: Set<String> = ["mixture of agents"]
 
     func fetchModels(sessionID: String) async throws -> AgentModelCatalog {
         try await client.connect()
@@ -210,7 +230,8 @@ final class HermesAgentGateway: AgentGateway, @unchecked Sendable {
             if Self.hiddenProviderNames.contains(where: { lowerName.contains($0) }) { return nil }
             let isUserDefined = raw["is_user_defined"]?.boolValue ?? false
             var modelIDs = raw["models"]?.arrayValue?.compactMap { $0.stringValue } ?? []
-            if lowerName.contains("opencode zen") {
+            if lowerName.contains("opencode zen")
+                || lowerName.contains("nous portal") {
                 modelIDs = modelIDs.filter { $0.lowercased().contains("free") }
             }
             guard !modelIDs.isEmpty else { return nil }
@@ -416,5 +437,3 @@ final class HermesAgentGateway: AgentGateway, @unchecked Sendable {
         }.joined(separator: "\n\n")
     }
 }
-
-

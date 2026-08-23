@@ -17,6 +17,7 @@ final class AppShellViewModel: ObservableObject {
     @Published private(set) var sessions: [AgentSessionSummary] = []
     @Published private(set) var workspaces: [AgentWorkspace] = []
     @Published private(set) var archivedSessionIDs: Set<String> = []
+    @Published private(set) var pendingResponseIDs: Set<String> = []
     @Published private(set) var isLoading = false
     @Published var errorMessage: String?
     @Published private(set) var target = ConversationTarget()
@@ -42,6 +43,7 @@ final class AppShellViewModel: ObservableObject {
             archivedSessionIDs = []
         }
         target = ConversationTarget()
+        pendingResponseIDs = []
         await load()
     }
 
@@ -54,6 +56,7 @@ final class AppShellViewModel: ObservableObject {
 
         do {
             let snapshot = try await gateway.navigation()
+            let previouslyRunningIDs = Set(sessions.filter(\.isRunning).map(\.id))
             sessions = snapshot.sessions.sorted(by: AgentSessionOrdering.newestFirst)
             workspaces = snapshot.workspaces
             archivedSessionIDs = snapshot.archivedSessionIDs
@@ -71,6 +74,12 @@ final class AppShellViewModel: ObservableObject {
                       let defaultWorkspaceID {
                 target = ConversationTarget(workspaceID: defaultWorkspaceID)
             }
+
+            let currentlyRunningIDs = Set(snapshot.sessions.filter(\.isRunning).map(\.id))
+            let selectedID = target.session?.id
+            pendingResponseIDs = previouslyRunningIDs
+                .subtracting(currentlyRunningIDs)
+                .subtracting([selectedID].compactMap { $0 })
         } catch is CancellationError {
         } catch let error as URLError where error.code == .cancelled {
         } catch {
@@ -81,6 +90,7 @@ final class AppShellViewModel: ObservableObject {
     }
 
     func selectSession(_ session: AgentSessionSummary, workspaceID: String?) {
+        pendingResponseIDs.remove(session.id)
         target = ConversationTarget(session: session, workspaceID: workspaceID)
     }
 

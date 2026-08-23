@@ -6,6 +6,7 @@ struct ConversationDrawerView: View {
     let sessionsForWorkspace: (AgentWorkspace) -> [AgentSessionSummary]
     let ungroupedSessions: [AgentSessionSummary]
     let selectedSessionID: String?
+    let pendingResponseIDs: Set<String>
     let isLoading: Bool
     let errorMessage: String?
     let isConnected: Bool
@@ -353,9 +354,18 @@ struct ConversationDrawerView: View {
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(.tertiary)
                     .fixedSize()
-                if session.isRunning {
-                    ProgressView().controlSize(.mini)
+                Group {
+                    if session.isRunning {
+                        ProgressView().controlSize(.mini)
+                    } else if pendingResponseIDs.contains(session.id),
+                              selectedSessionID != session.id {
+                        Circle()
+                            .fill(Color.orange)
+                            .frame(width: 8, height: 8)
+                    }
                 }
+                .frame(width: 16, height: 16)
+                .fixedSize()
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
