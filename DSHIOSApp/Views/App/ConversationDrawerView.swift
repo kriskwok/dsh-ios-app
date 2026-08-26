@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ConversationDrawerView: View {
     let profile: ServerProfile?
+    let profiles: [ServerProfile]
     let workspaces: [AgentWorkspace]
     let sessionsForWorkspace: (AgentWorkspace) -> [AgentSessionSummary]
     let ungroupedSessions: [AgentSessionSummary]
@@ -12,13 +13,15 @@ struct ConversationDrawerView: View {
     let isConnected: Bool
     let isReconnecting: Bool
     let isDrawerGestureActive: Bool
-    let onNewConversation: (String?) -> Void
+    let onNewConversation: (AgentWorkspace?) -> Void
     let onSelectSession: (AgentSessionSummary, String?) -> Void
     let onRefresh: () async -> Void
     let onOpenSettings: () -> Void
+    let onSelectServer: (ServerProfile) -> Void
 
     @State private var collapsedWorkspaceIDs: Set<String> = []
     @State private var collapsedChannelIDs: Set<String> = ["automation"]
+    @State private var showsServerSwitcher = false
 
     private let horizontalPadding: CGFloat = 22
     private let logoSize: CGFloat = 42
@@ -37,9 +40,14 @@ struct ConversationDrawerView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(profile?.name ?? "Agent")
-                        .font(.title3.weight(.bold))
-                        .lineLimit(1)
+                    HStack(spacing: 6) {
+                        Text(profile?.name ?? "Agent")
+                            .font(.title3.weight(.bold))
+                            .lineLimit(1)
+                        if !otherProfiles.isEmpty {
+                            serverSwitcherButton
+                        }
+                    }
                     Text(profile?.displayAddress ?? "未选择服务器")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -81,7 +89,7 @@ struct ConversationDrawerView: View {
                             }
                         } else {
                             ForEach(orderedWorkspaces()) { workspace in
-                                workspaceSection(workspace, channel: nil)
+                                dshWorkspaceSection(workspace)
                             }
                         }
 
@@ -147,6 +155,58 @@ struct ConversationDrawerView: View {
         return .secondary
     }
 
+    private var otherProfiles: [ServerProfile] {
+        guard let profile else { return [] }
+        return profiles.filter { $0.id != profile.id }
+    }
+
+    private var serverSwitcherButton: some View {
+        Button {
+            showsServerSwitcher = true
+        } label: {
+            Image(systemName: "switch.2")
+                .font(.system(size: 11, weight: .bold))
+                .frame(width: 24, height: 24)
+                .background(Color.primary.opacity(0.07), in: Circle())
+                .overlay(Circle().stroke(Color.primary.opacity(0.08), lineWidth: 0.5))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("切换服务器")
+        .popover(isPresented: $showsServerSwitcher, arrowEdge: .top) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(otherProfiles) { candidate in
+                    Button {
+                        showsServerSwitcher = false
+                        onSelectServer(candidate)
+                    } label: {
+                        HStack(spacing: 12) {
+                            AgentLogoView(kind: candidate.kind, size: 34)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(candidate.name)
+                                    .font(.subheadline.weight(.semibold))
+                                    .lineLimit(1)
+                                Text(candidate.kind.title)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: 8)
+                        }
+                        .padding(.vertical, 7)
+                        .padding(.horizontal, 6)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    if candidate.id != otherProfiles.last?.id {
+                        Divider()
+                    }
+                }
+            }
+            .frame(minWidth: 230)
+            .padding(6)
+            .presentationCompactAdaptation(.popover)
+        }
+    }
+
     private var channelSections: [AgentSessionChannel] {
         let grouped = Dictionary(grouping: visibleSessions, by: \.channel)
         return grouped.keys.sorted { lhs, rhs in
@@ -168,12 +228,27 @@ struct ConversationDrawerView: View {
     @ViewBuilder
     private func channelSection(_ channel: AgentSessionChannel) -> some View {
         let isExpanded = !collapsedChannelIDs.contains(channel.id)
+        let workspaces = hermesWorkspaces(for: channel)
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(isExpanded ? 0 : -90))
+                Button {
+                    withAnimation(.snappy(duration: 0.2)) {
+                        if isExpanded {
+                            collapsedChannelIDs.insert(channel.id)
+                        } else {
+                            collapsedChannelIDs.remove(channel.id)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 0 : -90))
+                        .frame(width: 24, height: 24)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isExpanded ? "收起\(channel.title)" : "展开\(channel.title)")
+
                 Image(systemName: channel.systemImage)
                     .font(.subheadline.weight(.semibold))
                 Text(channel.title)
@@ -182,35 +257,18 @@ struct ConversationDrawerView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 5)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                withAnimation(.snappy(duration: 0.2)) {
-                    if isExpanded {
-                        collapsedChannelIDs.insert(channel.id)
-                    } else {
-                        collapsedChannelIDs.remove(channel.id)
+
+            if isExpanded {
+                if workspaces.count == 1, let workspace = workspaces.first {
+                    ForEach(sessions(in: workspace, channel: channel)) { session in
+                        drawerSessionRow(session, workspaceID: workspace.id)
+                    }
+                } else {
+                    ForEach(workspaces) { workspace in
+                        hermesWorkspaceSection(workspace, channel: channel)
                     }
                 }
             }
-
-            if isExpanded {
-                ForEach(orderedWorkspaces(for: channel)) { workspace in
-                    workspaceSection(workspace, channel: channel)
-                }
-
-                ForEach(ungroupedSessions.filter { $0.channel == channel }.sorted(by: AgentSessionOrdering.newestFirst)) { session in
-                    drawerSessionRow(session, workspaceID: nil)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func workspaceSection(_ workspace: AgentWorkspace, channel: AgentSessionChannel?) -> some View {
-        if let channel {
-            hermesWorkspaceSection(workspace, channel: channel)
-        } else {
-            dshWorkspaceSection(workspace)
         }
     }
 
@@ -245,7 +303,7 @@ struct ConversationDrawerView: View {
                 Spacer(minLength: 0)
 
                 Button {
-                    onNewConversation(workspace.id)
+                    onNewConversation(workspace)
                 } label: {
                     Image(systemName: "square.and.pencil")
                         .font(.subheadline.weight(.semibold))
@@ -271,44 +329,39 @@ struct ConversationDrawerView: View {
         let sessions = self.sessions(in: workspace, channel: channel)
         return VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(isExpanded ? 0 : -90))
+                Button {
+                    withAnimation(.snappy(duration: 0.2)) {
+                        if isExpanded {
+                            collapsedWorkspaceIDs.insert(key)
+                        } else {
+                            collapsedWorkspaceIDs.remove(key)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 0 : -90))
+                        .frame(width: 24, height: 24)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isExpanded ? "收起\(workspace.title)" : "展开\(workspace.title)")
+
                 Image(systemName: "folder")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Text(workspace.title)
                     .font(.caption.weight(.semibold))
                     .lineLimit(1)
+                    .truncationMode(.middle)
                 Spacer(minLength: 0)
+
+                newSessionButton(for: workspace)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 4)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                withAnimation(.snappy(duration: 0.2)) {
-                    if isExpanded {
-                        collapsedWorkspaceIDs.insert(key)
-                    } else {
-                        collapsedWorkspaceIDs.remove(key)
-                    }
-                }
-            }
 
             if isExpanded {
-                Button {
-                    onNewConversation(workspace.id)
-                } label: {
-                    Label("在此工作区新建 APP 对话", systemImage: "plus")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 7)
-                }
-                .buttonStyle(.plain)
-
                 ForEach(sessions) { session in
                     drawerSessionRow(session, workspaceID: workspace.id)
                 }
@@ -322,15 +375,30 @@ struct ConversationDrawerView: View {
             .sorted(by: AgentSessionOrdering.newestFirst)
     }
 
-    private func orderedWorkspaces(for channel: AgentSessionChannel? = nil) -> [AgentWorkspace] {
+    private func hermesWorkspaces(for channel: AgentSessionChannel) -> [AgentWorkspace] {
+        HermesAgentGateway.workspaces(from: visibleSessions.filter { $0.channel == channel })
+    }
+
+    private func newSessionButton(for workspace: AgentWorkspace) -> some View {
+        Button {
+            onNewConversation(workspace)
+        } label: {
+            Image(systemName: "plus")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 26, height: 26)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("在此工作区新建会话")
+    }
+
+    private func orderedWorkspaces() -> [AgentWorkspace] {
         workspaces
-            .filter { workspace in
-                guard let channel else { return true }
-                return !sessions(in: workspace, channel: channel).isEmpty
-            }
+            .filter { !sessionsForWorkspace($0).isEmpty }
             .sorted { lhs, rhs in
-                let lhsSessions = channel.map { sessions(in: lhs, channel: $0) } ?? sessionsForWorkspace(lhs)
-                let rhsSessions = channel.map { sessions(in: rhs, channel: $0) } ?? sessionsForWorkspace(rhs)
+                let lhsSessions = sessionsForWorkspace(lhs)
+                let rhsSessions = sessionsForWorkspace(rhs)
                 let lhsDate = AgentSessionOrdering.latestUpdate(in: lhsSessions) ?? .distantPast
                 let rhsDate = AgentSessionOrdering.latestUpdate(in: rhsSessions) ?? .distantPast
                 if lhsDate != rhsDate { return lhsDate > rhsDate }

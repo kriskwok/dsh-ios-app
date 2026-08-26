@@ -34,6 +34,12 @@ final class DSHAgentGateway: AgentGateway, @unchecked Sendable {
             method: "session.history",
             payload: ["sessionId": .string(session.id), "maxMessages": .number(80)]
         )
+        // TEMP DEBUG: dump keys and key objects
+        for key in (result.value.objectValue ?? [:]).keys.sorted() {
+            print("[DEBUG-DSH-HIST] key:", key)
+        }
+        if let cp = result.value["contextPressure"] { debugPrint("[DEBUG-DSH-HIST] contextPressure:", cp) }
+        if let tu = result.value["tokenUsage"] { debugPrint("[DEBUG-DSH-HIST] tokenUsage:", tu) }
         let history = try DSHHistoryPage(json: result.value)
         var projector = ConversationProjector()
         projector.replace(with: history.events)
@@ -43,7 +49,8 @@ final class DSHAgentGateway: AgentGateway, @unchecked Sendable {
             messages: projector.messages(),
             title: history.title?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? session.title,
             isRunning: Self.runningState(from: history.events, fallback: session.isRunning),
-            currentModel: nil
+            currentModel: nil,
+            metrics: AgentSessionMetrics(json: result.value)
         )
     }
 
@@ -143,6 +150,15 @@ final class DSHAgentGateway: AgentGateway, @unchecked Sendable {
                         continuation.yield(.connected)
                         if let event = try Self.mapMux(request) {
                             continuation.yield(event)
+                            // Extract usage metrics from assistant/message events
+                            if case "session/event" = request.method,
+                               request.payload["event"]?["type"]?.stringValue == "assistant/message",
+                               let sessionID = request.payload["sessionId"]?.stringValue,
+                               let usage = request.payload["event"]?["message"]?["usage"]
+                                    ?? request.payload["event"]?["usage"],
+                               let metrics = AgentSessionMetrics(json: usage) {
+                                continuation.yield(.sessionMetrics(sessionID: sessionID, metrics: metrics))
+                            }
                         }
                     }
                 } catch {
@@ -357,6 +373,7 @@ final class DSHAgentGateway: AgentGateway, @unchecked Sendable {
                 default: return nil
                 }
             case "assistant/message":
+                print("[DEBUG-DSH-AM] usage:", event.data["usage"] ?? "nil")
                 let message = event.data["message"] ?? event.data
                 let content = splitContent(message["content"])
                 return .assistantComplete(
@@ -437,5 +454,3 @@ final class DSHAgentGateway: AgentGateway, @unchecked Sendable {
         return (object["command"] as? String) ?? (object["cmd"] as? String)
     }
 }
-
-

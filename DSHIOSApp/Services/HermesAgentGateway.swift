@@ -21,7 +21,6 @@ final class HermesAgentGateway: AgentGateway, @unchecked Sendable {
             if let session = Self.session(from: raw) { sessionsByID[session.id] = session }
         }
 
-        var workspaces: [AgentWorkspace] = []
         var archivedIDs: Set<String> = []
         if let tree = try? await client.call(method: "projects.tree", params: ["preview_limit": .number(10)]) {
             for project in tree["projects"]?.arrayValue ?? [] {
@@ -40,29 +39,21 @@ final class HermesAgentGateway: AgentGateway, @unchecked Sendable {
                             session.source = sessionsByID[session.id]?.source
                         }
                         sessionsByID[session.id] = session
+                        if session.workingDirectory == nil {
+                            session.workingDirectory = hydrated["path"]?.stringValue
+                                ?? hydrated["repos"]?.arrayValue?.first?["path"]?.stringValue
+                        }
                         if raw["archived"]?.boolValue == true { archivedIDs.insert(session.id) }
                     }
                 }
-                let sessionIDs = rawSessions.compactMap { $0["id"]?.stringValue }
-                let path = hydrated["path"]?.stringValue
-                    ?? hydrated["repos"]?.arrayValue?.first?["path"]?.stringValue
-                    ?? ""
-                workspaces.append(AgentWorkspace(
-                    id: id,
-                    path: path,
-                    title: hydrated["label"]?.stringValue ?? id,
-                    sessionIDs: sessionIDs
-                ))
             }
         }
 
         // Fetch coding agent sessions from chat-run API
-        var caSessionIDs: [String] = []
         if let chatRuns = try? await client.httpGet("api/chat-run/runs", query: ["limit": "200"]) {
             let runs = chatRuns["runs"]?.arrayValue ?? chatRuns["data"]?.arrayValue ?? []
             for run in runs {
                 guard let runID = run["id"]?.stringValue ?? run["run_id"]?.stringValue else { continue }
-                caSessionIDs.append(runID)
                 let title = run["title"]?.stringValue ?? run["input"]?.stringValue ?? runID
                 let updatedAt = run["updated_at"]?.stringValue ?? run["created_at"]?.stringValue ?? ""
                 let date = ISO8601DateFormatter().date(from: updatedAt) ?? Date()
@@ -78,24 +69,10 @@ final class HermesAgentGateway: AgentGateway, @unchecked Sendable {
                 )
             }
         }
-        if !caSessionIDs.isEmpty {
-            let caWorkspace = AgentWorkspace(
-                id: "__coding_agent__",
-                path: "",
-                title: "CODING AGENT",
-                sessionIDs: caSessionIDs
-            )
-            // Insert second-to-last (before the last workspace group)
-            if workspaces.count >= 1 {
-                workspaces.insert(caWorkspace, at: max(workspaces.count - 1, 0))
-            } else {
-                workspaces.append(caWorkspace)
-            }
-        }
 
         return AgentNavigationSnapshot(
             sessions: sessionsByID.values.sorted { $0.updatedAt > $1.updatedAt },
-            workspaces: workspaces,
+            workspaces: Self.workspaces(from: Array(sessionsByID.values)),
             archivedSessionIDs: archivedIDs
         )
     }
@@ -117,14 +94,15 @@ final class HermesAgentGateway: AgentGateway, @unchecked Sendable {
                 ?? result["title"]?.stringValue?.nilIfEmpty
                 ?? session.title,
             isRunning: result["running"]?.boolValue ?? false,
-            currentModel: Self.extractModel(from: result)
+            currentModel: Self.extractModel(from: result),
+            metrics: AgentSessionMetrics(json: result)
         )
     }
 
     func createSession(in workspace: AgentWorkspace?) async throws -> AgentConversationContext {
         try await connect()
         var params: [String: JSONValue] = ["source": .string("ios"), "cols": .number(100)]
-        if let path = workspace?.path, !path.isEmpty { params["cwd"] = .string(path) }
+        // Hermes uses server-default cwd; do not override
         let result = try await client.call(method: "session.create", params: params)
         guard let runtimeID = result["session_id"]?.stringValue else {
             throw HermesClientError.invalidResponse("创建会话缺少 session_id")
@@ -265,6 +243,7 @@ final class HermesAgentGateway: AgentGateway, @unchecked Sendable {
     }
 
     static func map(_ event: HermesGatewayEvent) -> [AgentGatewayEvent] {
+        print("[DEBUG-MAP] event.type:", event.type, "sessionID:", event.sessionID ?? "nil")
         guard let sessionID = event.sessionID else {
             return event.type == "error"
                 ? [.failure(event.payload["message"]?.stringValue ?? "Hermes 返回错误")]
@@ -278,12 +257,16 @@ final class HermesAgentGateway: AgentGateway, @unchecked Sendable {
         case "message.start":
             return [.running(sessionID: sessionID, value: true)]
         case "message.complete":
-            return [.assistantComplete(
+            var output: [AgentGatewayEvent] = [.assistantComplete(
                 sessionID: sessionID,
                 messageKey: nil,
                 text: event.payload["text"]?.stringValue ?? "",
                 reasoning: event.payload["reasoning"]?.stringValue ?? ""
             )]
+            if let metrics = AgentSessionMetrics(json: event.payload) {
+                output.append(.sessionMetrics(sessionID: sessionID, metrics: metrics))
+            }
+            return output
         case "tool.start":
             return [.toolStarted(
                 sessionID: sessionID,
@@ -304,6 +287,9 @@ final class HermesAgentGateway: AgentGateway, @unchecked Sendable {
             }
             if let title = event.payload["title"]?.stringValue, !title.isEmpty {
                 output.append(.title(sessionID: sessionID, value: title))
+            }
+            if let metrics = AgentSessionMetrics(json: event.payload) {
+                output.append(.sessionMetrics(sessionID: sessionID, metrics: metrics))
             }
             return output
         case "status.update":
@@ -358,6 +344,27 @@ final class HermesAgentGateway: AgentGateway, @unchecked Sendable {
         if payload["smart_denied"]?.boolValue == true { return [.once, .deny] }
         if payload["allow_permanent"]?.boolValue == false { return [.once, .session, .deny] }
         return [.once, .session, .always, .deny]
+    }
+
+    static func workspaces(from sessions: [AgentSessionSummary]) -> [AgentWorkspace] {
+        let grouped = Dictionary(grouping: sessions) { session in
+            session.workingDirectory?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        }
+
+        return grouped.map { path, sessions in
+            AgentWorkspace(
+                id: "cwd:\(path)",
+                path: path,
+                title: path.isEmpty ? "未知工作区" : path,
+                sessionIDs: sessions.map(\.id)
+            )
+        }
+        .sorted { lhs, rhs in
+            let lhsDate = AgentSessionOrdering.latestUpdate(in: grouped[lhs.path] ?? []) ?? .distantPast
+            let rhsDate = AgentSessionOrdering.latestUpdate(in: grouped[rhs.path] ?? []) ?? .distantPast
+            if lhsDate != rhsDate { return lhsDate > rhsDate }
+            return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+        }
     }
 
     static func projectSessions(_ project: JSONValue) -> [JSONValue] {

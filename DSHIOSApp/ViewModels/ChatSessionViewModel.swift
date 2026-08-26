@@ -18,6 +18,7 @@ final class ChatSessionViewModel: ObservableObject {
     @Published private(set) var modelCatalog: AgentModelCatalog?
     @Published private(set) var isModelLoading = false
     @Published private(set) var isModelSelecting = false
+    @Published private(set) var metrics: AgentSessionMetrics?
 
     let agentName: String
     let agentKind: AgentServerKind
@@ -251,6 +252,9 @@ final class ChatSessionViewModel: ObservableObject {
         true
     }
 
+    var contextUsageRatio: Double? { metrics?.contextUsageRatio }
+    var cacheHitRatio: Double? { metrics?.cacheHitRatio }
+
     var currentModelDisplayName: String? {
         guard canSelectModel else { return nil }
         guard let catalog = modelCatalog, let selection = catalog.currentModel else { return nil }
@@ -377,6 +381,8 @@ final class ChatSessionViewModel: ObservableObject {
         isRunning = context.isRunning
         isLoading = false
         contextModel = context.currentModel
+        metrics = context.metrics
+        print("[DEBUG-VM] apply context. metrics:", context.metrics != nil ? "NON-NIL context=(context.metrics?.contextUsageRatio ?? -1) cache=(context.metrics?.cacheHitRatio ?? -1)" : "nil")
         if !preservingMessages {
             messages = context.messages
         }
@@ -495,6 +501,10 @@ final class ChatSessionViewModel: ObservableObject {
             guard isCurrent(sessionID) else { return }
             pendingQuestions.removeAll { $0.responseToken == questionRpcId }
             if respondingQuestionID == questionRpcId { respondingQuestionID = nil }
+
+        case .sessionMetrics(let sessionID, let newMetrics):
+            guard isCurrent(sessionID) else { return }
+            metrics = metrics?.merging(newMetrics) ?? newMetrics
 
         case .failure(let message):
             errorMessage = message

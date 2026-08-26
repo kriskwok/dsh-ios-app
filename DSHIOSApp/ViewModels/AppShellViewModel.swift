@@ -94,18 +94,24 @@ final class AppShellViewModel: ObservableObject {
         target = ConversationTarget(session: session, workspaceID: workspaceID)
     }
 
-    func startNewConversation(workspaceID: String? = nil) {
-        let workspaceID = workspaceID ?? defaultWorkspaceID
+    func startNewConversation(workspace: AgentWorkspace? = nil) {
+        let resolvedWorkspace = workspace ?? defaultWorkspace
         let reusableBlank: AgentSessionSummary?
-        if let workspaceID,
-           let workspace = workspaces.first(where: { $0.id == workspaceID }) {
-            reusableBlank = workspace.sessionIDs
+        if let resolvedWorkspace {
+            reusableBlank = resolvedWorkspace.sessionIDs
                 .compactMap { id in sessions.first(where: { $0.id == id }) }
-                .first { $0.isBlank && $0.workingDirectory == workspace.path }
+                .first { $0.isBlank && $0.workingDirectory == resolvedWorkspace.path }
         } else {
             reusableBlank = nil
         }
-        target = ConversationTarget(session: reusableBlank, workspaceID: workspaceID)
+
+        target = ConversationTarget(session: reusableBlank, workspaceID: resolvedWorkspace?.id)
+    }
+
+    private var defaultWorkspace: AgentWorkspace? {
+        defaultWorkspaceID.flatMap { id in
+            workspaces.first(where: { $0.id == id })
+        }
     }
 
     private var defaultWorkspaceID: String? {

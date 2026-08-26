@@ -33,7 +33,6 @@ final class CodexAgentGateway: AgentGateway, @unchecked Sendable {
                 "archived": .bool(false),
                 "sortKey": .string("updated_at"),
                 "sortDirection": .string("desc"),
-                "sourceKinds": .array([.string("exec"), .string("vscode")]),
                 "modelProviders": .array([.string("custom"), .string("openai")])
             ]
             if let cursor, !cursor.isEmpty {
@@ -88,10 +87,11 @@ final class CodexAgentGateway: AgentGateway, @unchecked Sendable {
 
     func openSession(_ session: AgentSessionSummary) async throws -> AgentConversationContext {
         try await connect()
-        let resume = try await client.call(method: "thread/resume", params: [
-            "threadId": .string(session.id),
-            "cwd": .string(session.workingDirectory ?? "")
-        ])
+        var resumeParams: [String: JSONValue] = ["threadId": .string(session.id)]
+        if let cwd = session.workingDirectory, !cwd.isEmpty {
+            resumeParams["cwd"] = .string(cwd)
+        }
+        let resume = try await client.call(method: "thread/resume", params: resumeParams)
         let threadID = session.id
         let read = try await client.call(method: "thread/read", params: [
             "threadId": .string(threadID),
@@ -109,7 +109,8 @@ final class CodexAgentGateway: AgentGateway, @unchecked Sendable {
             messages: messages,
             title: thread["name"]?.stringValue?.nilIfEmpty ?? session.title,
             isRunning: Self.isRunning(thread["status"]),
-            currentModel: model
+            currentModel: model,
+            metrics: AgentSessionMetrics(json: thread) ?? AgentSessionMetrics(json: resume)
         )
     }
 
@@ -472,6 +473,9 @@ final class CodexAgentGateway: AgentGateway, @unchecked Sendable {
             threadState.isRunning = false
             threadState.streamingItems.removeAll()
             var events: [AgentGatewayEvent] = [.running(sessionID: threadID, value: false)]
+            if let metrics = AgentSessionMetrics(json: params["turn"] ?? params) {
+                events.append(.sessionMetrics(sessionID: threadID, metrics: metrics))
+            }
             for item in params["turn"]?["items"]?.arrayValue ?? [] {
                 let itemID = item["id"]?.stringValue ?? ""
                 switch item["type"]?.stringValue {

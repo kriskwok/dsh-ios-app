@@ -99,6 +99,42 @@ final class HermesProtocolTests: XCTestCase {
         )
     }
 
+    func testGroupsHermesWorkspacesBySessionWorkingDirectory() {
+        let sessions = [
+            AgentSessionSummary(
+                id: "old",
+                updatedAt: Date(timeIntervalSince1970: 1_700_000_000),
+                workingDirectory: "/repos/dsh",
+                source: "cli"
+            ),
+            AgentSessionSummary(
+                id: "new",
+                updatedAt: Date(timeIntervalSince1970: 1_700_000_100),
+                workingDirectory: " /repos/dsh ",
+                source: "ios"
+            ),
+            AgentSessionSummary(
+                id: "other",
+                updatedAt: Date(timeIntervalSince1970: 1_700_000_200),
+                workingDirectory: "/repos/other",
+                source: "cli"
+            ),
+            AgentSessionSummary(
+                id: "unknown",
+                updatedAt: Date(timeIntervalSince1970: 1_699_999_000),
+                workingDirectory: nil,
+                source: "cli"
+            )
+        ]
+
+        let workspaces = HermesAgentGateway.workspaces(from: sessions)
+
+        XCTAssertEqual(workspaces.map(\.path), ["/repos/other", "/repos/dsh", ""])
+        XCTAssertEqual(workspaces[1].id, "cwd:/repos/dsh")
+        XCTAssertEqual(Set(workspaces[1].sessionIDs), ["old", "new"])
+        XCTAssertEqual(workspaces[2].title, "未知工作区")
+    }
+
     func testConvertsHermesHistoryMessages() {
         let history: JSONValue = .array([
             .object(["role": .string("user"), "text": .string("你好")]),
@@ -119,6 +155,54 @@ final class HermesProtocolTests: XCTestCase {
     }
 
     func testMapsOfficialDeltaEvent() {
+    func testParsesSessionUsageMetrics() throws {
+        let payload: JSONValue = .object([
+            "usage": .object([
+                "context_percent": .number(7.0),
+                "context_used": .number(18242.0),
+                "context_max": .number(262144.0)
+            ])
+        ])
+
+        let metrics = try XCTUnwrap(AgentSessionMetrics(json: payload))
+        XCTAssertEqual(metrics.contextUsageRatio ?? 0, 0.07, accuracy: 0.0001)
+        XCTAssertNil(metrics.cacheHitRatio)
+    }
+
+    func testComputesContextRatioFromTokens() throws {
+        let payload: JSONValue = .object([
+            "usage": .object([
+                "context_used": .number(18242.0),
+                "context_max": .number(262144.0)
+            ])
+        ])
+
+        let metrics = try XCTUnwrap(AgentSessionMetrics(json: payload))
+        XCTAssertEqual(metrics.contextUsageRatio ?? 0, 18242.0 / 262144.0, accuracy: 0.0001)
+    }
+
+    func testMapsMessageCompleteUsageMetrics() {
+        let event = HermesGatewayEvent(
+            type: "message.complete",
+            sessionID: "runtime-1",
+            payload: .object([
+                "text": .string("完成"),
+                "usage": .object([
+                    "context_percent": .number(7.0),
+                    "context_used": .number(18242.0),
+                    "context_max": .number(262144.0)
+                ])
+            ])
+        )
+
+        let events = HermesAgentGateway.map(event)
+        XCTAssertEqual(events.count, 2)
+        guard case .sessionMetrics(_, let metrics) = events[1] else {
+            return XCTFail("Expected session metrics")
+        }
+        XCTAssertEqual(metrics.contextUsageRatio ?? 0, 0.07, accuracy: 0.0001)
+    }
+
         let event = HermesGatewayEvent(
             type: "message.delta",
             sessionID: "runtime-1",

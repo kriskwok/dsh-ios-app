@@ -23,8 +23,12 @@ final class ServerStore: ObservableObject {
     }
 
     var selectedProfile: ServerProfile? {
-        guard let selectedProfileID else { return profiles.first }
-        return profiles.first { $0.id == selectedProfileID } ?? profiles.first
+        guard let selectedProfileID else { return enabledProfiles.first }
+        return profiles.first { $0.id == selectedProfileID && $0.isEnabled } ?? enabledProfiles.first
+    }
+
+    var enabledProfiles: [ServerProfile] {
+        profiles.filter(\.isEnabled)
     }
 
     func password(for profile: ServerProfile) -> String? {
@@ -54,8 +58,26 @@ final class ServerStore: ObservableObject {
     }
 
     func select(_ profile: ServerProfile) {
+        guard profile.isEnabled else { return }
         selectedProfileID = profile.id
         defaults.set(profile.id.uuidString, forKey: selectedProfileKey)
+    }
+
+    func setEnabled(_ isEnabled: Bool, for profile: ServerProfile) {
+        guard let index = profiles.firstIndex(where: { $0.id == profile.id }),
+              profiles[index].isEnabled != isEnabled else { return }
+        profiles[index].isEnabled = isEnabled
+        try? persistProfiles()
+
+        if !isEnabled && selectedProfileID == profile.id {
+            if let fallback = enabledProfiles.first {
+                select(fallback)
+            } else {
+                selectedProfileID = nil
+                defaults.removeObject(forKey: selectedProfileKey)
+            }
+        }
+        revision += 1
     }
 
     func setThemeMode(_ mode: AppThemeMode) {
@@ -70,7 +92,7 @@ final class ServerStore: ObservableObject {
         try? keychain.deletePassword(for: profile.id)
         try? keychain.deleteData(for: KeychainStore.hermesTokenAccount(for: profile.id))
         if selectedProfileID == profile.id {
-            selectedProfileID = profiles.first?.id
+            selectedProfileID = enabledProfiles.first?.id
             if let selectedProfileID {
                 defaults.set(selectedProfileID.uuidString, forKey: selectedProfileKey)
             } else {
@@ -98,7 +120,7 @@ final class ServerStore: ObservableObject {
            profiles.contains(where: { $0.id == id }) {
             selectedProfileID = id
         } else {
-            selectedProfileID = profiles.first?.id
+            selectedProfileID = enabledProfiles.first?.id
         }
     }
 }

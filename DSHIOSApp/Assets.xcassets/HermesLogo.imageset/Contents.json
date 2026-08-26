@@ -1,15 +1,17 @@
 {
   "images" : [
     {
-      "filename" : "HermesLogo.jpg",
+      "filename" : "HermesLogo-1x.png",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
+      "filename" : "HermesLogo-2x.png",
       "idiom" : "universal",
       "scale" : "2x"
     },
     {
+      "filename" : "HermesLogo-3x.png",
       "idiom" : "universal",
       "scale" : "3x"
     }

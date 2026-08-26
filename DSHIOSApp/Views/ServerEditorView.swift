@@ -86,7 +86,8 @@ struct ServerEditorView: View {
                 kind: kind,
                 name: name,
                 address: address,
-                username: username
+                username: username,
+                isEnabled: existingProfile?.isEnabled ?? true
             )
             try store.upsert(profile, password: password.isEmpty ? nil : password)
             dismiss()

@@ -6,23 +6,26 @@ struct ServerProfile: Codable, Hashable, Identifiable {
     var name: String
     var baseURL: URL
     var username: String
+    var isEnabled: Bool
 
     init(
         id: UUID = UUID(),
         kind: AgentServerKind = .dsh,
         name: String,
         baseURL: URL,
-        username: String = ""
+        username: String = "",
+        isEnabled: Bool = true
     ) {
         self.id = id
         self.kind = kind
         self.name = name
         self.baseURL = baseURL
         self.username = username
+        self.isEnabled = isEnabled
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, kind, name, baseURL, username
+        case id, kind, name, baseURL, username, isEnabled
     }
 
     init(from decoder: Decoder) throws {
@@ -32,6 +35,7 @@ struct ServerProfile: Codable, Hashable, Identifiable {
         name = try container.decode(String.self, forKey: .name)
         baseURL = try container.decode(URL.self, forKey: .baseURL)
         username = try container.decodeIfPresent(String.self, forKey: .username) ?? ""
+        isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
     }
 }
 
@@ -72,7 +76,8 @@ extension ServerProfile {
         kind: AgentServerKind = .dsh,
         name rawName: String,
         address rawAddress: String,
-        username rawUsername: String
+        username rawUsername: String,
+        isEnabled: Bool = true
     ) throws -> ServerProfile {
         let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { throw ValidationError.missingName }
@@ -116,7 +121,8 @@ extension ServerProfile {
             kind: kind,
             name: name,
             baseURL: url,
-            username: rawUsername.trimmingCharacters(in: .whitespacesAndNewlines)
+            username: rawUsername.trimmingCharacters(in: .whitespacesAndNewlines),
+            isEnabled: isEnabled
         )
     }
 
@@ -128,4 +134,3 @@ extension ServerProfile {
             || !host.contains(".")
     }
 }
-

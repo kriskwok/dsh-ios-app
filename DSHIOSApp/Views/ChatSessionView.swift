@@ -376,6 +376,16 @@ struct ChatSessionView: View {
             HStack(spacing: 8) {
                 Spacer()
                 if viewModel.canSelectModel {
+                    if let contextUsageRatio = viewModel.contextUsageRatio {
+                        ContextUsageRing(progress: min(max(contextUsageRatio, 0), 1))
+                    }
+                    if let cacheHitRatio = viewModel.cacheHitRatio {
+                        Text("缓存 \(Int((cacheHitRatio * 100).rounded()))%")
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
                     modelSelectorButton
                 }
                 sendButton

@@ -35,6 +35,7 @@ struct AppShellView: View {
 
                 ConversationDrawerView(
                     profile: serverStore.selectedProfile,
+                    profiles: serverStore.enabledProfiles,
                     workspaces: viewModel.workspaces,
                     sessionsForWorkspace: viewModel.sessions(in:),
                     ungroupedSessions: viewModel.ungroupedSessions,
@@ -45,8 +46,8 @@ struct AppShellView: View {
                     isConnected: chatIsConnected,
                     isReconnecting: chatIsReconnecting,
                     isDrawerGestureActive: isHorizontalDrawerDragActive,
-                    onNewConversation: { workspaceID in
-                        viewModel.startNewConversation(workspaceID: workspaceID)
+                    onNewConversation: { workspace in
+                        viewModel.startNewConversation(workspace: workspace)
                         closeDrawer()
                     },
                     onSelectSession: { session, workspaceID in
@@ -54,7 +55,11 @@ struct AppShellView: View {
                         closeDrawer()
                     },
                     onRefresh: { await viewModel.load() },
-                    onOpenSettings: { showsServerSettings = true }
+                    onOpenSettings: { showsServerSettings = true },
+                    onSelectServer: { profile in
+                        serverStore.select(profile)
+                        closeDrawer()
+                    }
                 )
                 .frame(width: drawerWidth)
                 .offset(x: drawerOffset)

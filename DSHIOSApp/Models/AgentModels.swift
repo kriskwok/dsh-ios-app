@@ -155,6 +155,136 @@ struct AgentConversationContext: Sendable {
     let title: String
     let isRunning: Bool
     var currentModel: AgentModelSelection?
+    var metrics: AgentSessionMetrics?
+}
+
+struct AgentSessionMetrics: Equatable, Sendable {
+    let contextUsageRatio: Double?
+    let cacheHitRatio: Double?
+
+    init(contextUsageRatio: Double? = nil, cacheHitRatio: Double? = nil) {
+        self.contextUsageRatio = Self.normalizedRatio(contextUsageRatio)
+        self.cacheHitRatio = Self.normalizedRatio(cacheHitRatio)
+    }
+
+    init?(json value: JSONValue?) {
+        guard let value else { return nil }
+        // DSH format: contextPressure and tokenUsage at top level
+        let dshContext = Self.contextFromDSHPressure(in: value)
+        let dshCache = Self.cacheFromDSHTokenUsage(in: value)
+        // Hermes/Codex format: context_percent / cache at various levels
+        let hermesContext = Self.contextPercentFromUsage(in: value)
+        let hermesCache = Self.cacheHitFromUsage(in: value)
+        let ctx = dshContext ?? hermesContext
+        let cache = dshCache ?? hermesCache
+        guard ctx != nil || cache != nil else { return nil }
+        self.init(contextUsageRatio: ctx, cacheHitRatio: cache)
+    }
+
+    private static func contextFromDSHPressure(in value: JSONValue) -> Double? {
+        guard let pressure = value["contextPressure"] else { return nil }
+        let projected = pressure["projectedTokens"]?.doubleValue
+        let window = pressure["contextWindow"]?.doubleValue
+        if let projected, let window, window > 0 { return projected / window }
+        return nil
+    }
+
+    private static func cacheFromDSHTokenUsage(in value: JSONValue) -> Double? {
+        guard let usage = value["tokenUsage"] else { return nil }
+        let cached = usage["cacheReadTokens"]?.doubleValue
+        let uncached = usage["uncachedInputTokens"]?.doubleValue
+        if let cached, let uncached {
+            let total = cached + uncached
+            if total > 0 { return cached / total }
+        }
+        return nil
+    }
+
+    func merging(_ newer: AgentSessionMetrics?) -> AgentSessionMetrics {
+        guard let newer else { return self }
+        return AgentSessionMetrics(
+            contextUsageRatio: newer.contextUsageRatio ?? contextUsageRatio,
+            cacheHitRatio: newer.cacheHitRatio ?? cacheHitRatio
+        )
+    }
+
+    private static func contextPercentFromUsage(in value: JSONValue) -> Double? {
+        // Try direct keys at multiple levels
+        if let ratio = Self.directRatio(value, keys: ["context_percent", "contextPercent", "contextUsage", "context_usage"]) {
+            return ratio
+        }
+        // Try inside nested containers
+        let containers = [value["usage"], value["tokenUsage"], value["token_usage"], value["tokens"]]
+        for container in containers {
+            if let container, let ratio = Self.directRatio(container, keys: ["context_percent", "contextPercent", "contextUsage", "context_usage"]) {
+                return ratio
+            }
+        }
+        // Try computing from token counts
+        if let ratio = Self.contextRatioFromTokens(in: value) {
+            return ratio
+        }
+        return nil
+    }
+
+    private static func cacheHitFromUsage(in value: JSONValue) -> Double? {
+        // Try direct keys at multiple levels
+        if let ratio = Self.directRatio(value, keys: ["cacheHitRate", "cache_hit_rate", "cacheHit", "cache_hit", "cachedTokensRatio"]) {
+            return ratio
+        }
+        // Try inside nested containers
+        let containers = [value["usage"], value["tokenUsage"], value["token_usage"], value["tokens"]]
+        for container in containers {
+            if let container {
+                if let ratio = Self.directRatio(container, keys: ["cacheHitRate", "cache_hit_rate", "cacheHit", "cache_hit", "cachedTokensRatio"]) {
+                    return ratio
+                }
+                // Try computing from token counts
+                let cached = Self.firstNumber(container, keys: ["cached_tokens", "cachedTokens", "cache_read_tokens", "cacheReadTokens"], allowingZero: true)
+                let total = Self.firstNumber(container, keys: ["prompt_tokens", "promptTokens", "input_tokens", "inputTokens"], allowingZero: true)
+                if let cached, let total, total > 0 {
+                    return cached / total
+                }
+            }
+        }
+        return nil
+    }
+
+    private static func contextRatioFromTokens(in value: JSONValue) -> Double? {
+        let containers = [value["usage"], value["tokenUsage"], value["token_usage"], value["tokens"]]
+        for container in containers {
+            guard let container else { continue }
+            let numerator = firstNumber(container, keys: ["context_used", "contextUsed", "context_tokens", "contextTokens"], allowingZero: true)
+            let denominator = firstNumber(container, keys: ["context_max", "contextMax", "context_window", "contextWindow", "max_context_tokens", "maxContextTokens"], allowingZero: true)
+            if let numerator, let denominator, denominator > 0 {
+                return numerator / denominator
+            }
+        }
+        return nil
+    }
+
+    private static func directRatio(_ value: JSONValue, keys: [String]) -> Double? {
+        for key in keys {
+            if let ratio = value[key]?.doubleValue {
+                return ratio
+            }
+        }
+        return nil
+    }
+
+    private static func firstNumber(_ value: JSONValue, keys: [String], allowingZero: Bool) -> Double? {
+        for key in keys {
+            guard let number = value[key]?.doubleValue else { continue }
+            if allowingZero ? number >= 0 : number > 0 { return number }
+        }
+        return nil
+    }
+
+    private static func normalizedRatio(_ value: Double?) -> Double? {
+        guard var value, value.isFinite, value >= 0 else { return nil }
+        if value > 1, value <= 100 { value /= 100 }
+        return value > 1 ? nil : value
+    }
 }
 
 enum AgentApprovalChoice: String, CaseIterable, Hashable, Sendable {
@@ -228,6 +358,7 @@ enum AgentGatewayEvent: Sendable {
     case approvalResolved(sessionID: String, approvalID: String, outcome: String)
     case questionRequested(AgentQuestionRequest)
     case questionResolved(sessionID: String, questionRpcId: String, outcome: String)
+    case sessionMetrics(sessionID: String, metrics: AgentSessionMetrics)
     case failure(String)
 }
 

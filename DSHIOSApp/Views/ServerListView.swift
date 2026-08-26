@@ -29,19 +29,33 @@ struct ServerSettingsView: View {
                         themeSection
                         Section {
                             ForEach(store.profiles) { profile in
-                                Button {
-                                    onSelect(profile)
-                                } label: {
-                                    HStack {
-                                        ServerRow(profile: profile)
-                                        Spacer()
-                                        if store.selectedProfileID == profile.id {
-                                            Image(systemName: "checkmark.circle.fill")
-                                                .foregroundStyle(Color.accentColor)
+                                HStack {
+                                    Button {
+                                        onSelect(profile)
+                                    } label: {
+                                        HStack {
+                                            ServerRow(profile: profile)
+                                            Spacer()
+                                            if store.selectedProfileID == profile.id {
+                                                Image(systemName: "checkmark.circle.fill")
+                                                    .foregroundStyle(Color.accentColor)
+                                            }
                                         }
+                                        .contentShape(Rectangle())
                                     }
+                                    .buttonStyle(.plain)
+                                    .disabled(!profile.isEnabled)
+
+                                    Toggle(
+                                        profile.isEnabled ? "禁用服务器" : "启用服务器",
+                                        isOn: Binding(
+                                            get: { profile.isEnabled },
+                                            set: { store.setEnabled($0, for: profile) }
+                                        )
+                                    )
+                                    .labelsHidden()
+                                    .fixedSize()
                                 }
-                                .buttonStyle(.plain)
                                 .swipeActions(edge: .leading) {
                                     Button("编辑") { editorProfile = profile }
                                         .tint(.blue)
@@ -118,6 +132,11 @@ private struct ServerRow: View {
                     Text(profile.kind.title)
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
+                    if !profile.isEnabled {
+                        Text("已禁用")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 Text(profile.baseURL.absoluteString)
                     .font(.caption)
@@ -126,5 +145,6 @@ private struct ServerRow: View {
             }
         }
         .padding(.vertical, 3)
+        .opacity(profile.isEnabled ? 1 : 0.45)
     }
 }

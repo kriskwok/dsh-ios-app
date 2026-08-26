@@ -63,5 +63,6 @@ final class ServerProfileTests: XCTestCase {
         let profile = try JSONDecoder().decode(ServerProfile.self, from: data)
 
         XCTAssertEqual(profile.kind, .dsh)
+        XCTAssertTrue(profile.isEnabled)
     }
 }

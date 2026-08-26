@@ -80,6 +80,26 @@ final class ChatSessionViewModelTests: XCTestCase {
         viewModel.stop()
     }
     func testHandlesQuestionRequestAndResolution() {
+    func testSessionMetricsStayHiddenUntilDataArrives() {
+        let session = AgentSessionSummary(id: "session-1", title: "测试")
+        let viewModel = ChatSessionViewModel(
+            profile: ServerProfile(kind: .hermes, name: "Hermes", baseURL: URL(string: "https://hm.example.com")!),
+            password: "",
+            session: session,
+            workspace: nil,
+            onSessionCreated: { _ in },
+            onPromptAccepted: { _ in }
+        )
+
+        XCTAssertNil(viewModel.contextUsageRatio)
+        XCTAssertNil(viewModel.cacheHitRatio)
+
+        viewModel.handle(.sessionMetrics(sessionID: session.id, metrics: AgentSessionMetrics(contextUsageRatio: 0.07, cacheHitRatio: 0.8)))
+
+        XCTAssertEqual(viewModel.contextUsageRatio ?? 0, 0.07, accuracy: 0.0001)
+        XCTAssertEqual(viewModel.cacheHitRatio ?? 0, 0.8, accuracy: 0.0001)
+    }
+
         let session = AgentSessionSummary(id: "session-1", title: "测试")
         let viewModel = ChatSessionViewModel(
             profile: ServerProfile(
