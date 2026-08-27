@@ -11,11 +11,19 @@ private struct ChatScrollBottomPreferenceKey: PreferenceKey {
 struct ChatSessionView: View {
     @StateObject private var viewModel: ChatSessionViewModel
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.colorScheme) private var colorScheme
     @FocusState private var composerFocused: Bool
     @State private var isFollowingLatest = true
     @State private var hasPerformedInitialScroll = false
     @State private var showModelSelector = false
+    @State private var showPermissionPicker = false
+    @State private var pendingPermissionPreset: String?
+    @State private var showUploadOptions = false
+    @State private var showCamera = false
+    @State private var showPhotoLibrary = false
+    @State private var showDocumentPicker = false
     private let workspaceTitle: String?
+    private let sessionID: String?
     private let onOpenDrawer: () -> Void
     private let onNewConversation: () -> Void
     private let onConnectionChanged: (Bool, Bool) -> Void
@@ -39,6 +47,7 @@ struct ChatSessionView: View {
         onRunningChanged: @escaping (Bool) -> Void = { _ in }
     ) {
         workspaceTitle = workspace?.title
+        sessionID = session?.id
         self.onOpenDrawer = onOpenDrawer
         self.onNewConversation = onNewConversation
         self.isDrawerGestureActive = isDrawerGestureActive
@@ -69,9 +78,18 @@ struct ChatSessionView: View {
                                 .padding(.top, 72)
                         } else {
                             ForEach(viewModel.messages) { message in
-                                MessageRow(message: message) { action, payload in
-                                    Task { await viewModel.sendGenUIAction(name: action, payload: payload) }
-                                }
+                                MessageRow(
+                                    message: message,
+                                    onDSHUIAction: { action, payload in
+                                        Task { await viewModel.sendGenUIAction(name: action, payload: payload) }
+                                    },
+                                    attachmentLoader: { attachmentId, id, ext in
+                                        await viewModel.fetchAttachmentData(attachmentId: attachmentId, id: id, ext: ext)
+                                    },
+                                    remoteFileLoader: { path in
+                                        await viewModel.fetchRemoteFileData(path: path)
+                                    }
+                                )
                                 .id(message.id)
                             }
                         }
@@ -109,7 +127,7 @@ struct ChatSessionView: View {
                     }
                 }
                 .onChange(of: viewModel.messages) { _, _ in
-                    if !hasPerformedInitialScroll && !viewModel.isLoading {
+                    if !hasPerformedInitialScroll && !viewModel.messages.isEmpty {
                         scheduleScrollToLatest(using: proxy, force: true)
                     } else {
                         scheduleScrollToLatest(using: proxy)
@@ -118,6 +136,11 @@ struct ChatSessionView: View {
                 .onChange(of: viewModel.isLoading) { _, isLoading in
                     guard !isLoading, !viewModel.messages.isEmpty, !hasPerformedInitialScroll else { return }
                     scheduleScrollToLatest(using: proxy, force: true)
+                }
+                .onChange(of: sessionID) { _, _ in
+                    // Reset scroll state when switching to a different session.
+                    hasPerformedInitialScroll = false
+                    isFollowingLatest = true
                 }
                 .onChange(of: viewModel.isRunning) { _, isRunning in
                     onRunningChanged(isRunning)
@@ -151,6 +174,11 @@ struct ChatSessionView: View {
                         await Task.yield()
                         await Task.yield()
                         proxy.scrollTo("conversation-bottom", anchor: .bottom)
+                    }
+                }
+                .onAppear {
+                    if !hasPerformedInitialScroll && !viewModel.messages.isEmpty {
+                        scheduleScrollToLatest(using: proxy, force: true)
                     }
                 }
                 .overlay(alignment: .bottomTrailing) {
@@ -202,6 +230,90 @@ struct ChatSessionView: View {
                 }
             }
         }
+        .overlay(alignment: .bottom) {
+            if showPermissionPicker && !viewModel.permissionOptions.isEmpty {
+                ZStack(alignment: .bottomLeading) {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showPermissionPicker = false
+                            }
+                        }
+
+                    permissionPicker
+                        .padding(.leading, 20)
+                        .padding(.bottom, 60)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
+            }
+        }
+        .alert("切换到完全权限？", isPresented: Binding(
+            get: { pendingPermissionPreset != nil },
+            set: { if !$0 { pendingPermissionPreset = nil } }
+        )) {
+            Button("取消", role: .cancel) { pendingPermissionPreset = nil }
+            Button("确认切换", role: .destructive) {
+                if let preset = pendingPermissionPreset {
+                    Task { await viewModel.setPermission(preset) }
+                }
+                pendingPermissionPreset = nil
+                withAnimation(.easeInOut(duration: 0.2)) { showPermissionPicker = false }
+            }
+        } message: {
+            Text("完全权限将允许 Agent 无限制地访问文件系统且不再弹出审批确认，请确认你信任当前会话的操作。")
+        }
+        .overlay(alignment: .top) {
+            if let toast = viewModel.permissionToast {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    Text("权限已切换为：\(toast)")
+                        .font(.subheadline.weight(.medium))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(.regularMaterial, in: Capsule())
+                .overlay {
+                    Capsule().strokeBorder(.primary.opacity(0.1), lineWidth: 1)
+                }
+                .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+                .padding(.top, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(100)
+            }
+        }
+        .fullScreenCover(isPresented: $showCamera) {
+            CameraCaptureView(
+                onCapture: { image in
+                    viewModel.addComposerImage(image)
+                    showCamera = false
+                },
+                onClose: { showCamera = false }
+            )
+        }
+        .fullScreenCover(isPresented: $showPhotoLibrary) {
+            PhotoLibraryPicker(
+                onSubmit: { images in
+                    for image in images {
+                        viewModel.addComposerImage(image)
+                    }
+                    showPhotoLibrary = false
+                },
+                onClose: { showPhotoLibrary = false }
+            )
+        }
+        .fullScreenCover(isPresented: $showDocumentPicker) {
+            DocumentPicker(
+                onPick: { urls in
+                    for url in urls {
+                        viewModel.addComposerFile(url: url)
+                    }
+                    showDocumentPicker = false
+                },
+                onCancel: { showDocumentPicker = false }
+            )
+        }
         .task { viewModel.start() }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
@@ -213,6 +325,7 @@ struct ChatSessionView: View {
                 }
             case .background, .inactive:
                 showModelSelector = false
+                showPermissionPicker = false
             @unknown default:
                 break
             }
@@ -235,6 +348,13 @@ struct ChatSessionView: View {
         Task { @MainActor in
             await Task.yield()
             await Task.yield()
+            // For the initial forced scroll, add a small delay to ensure the
+            // content (especially images and long text) is fully laid out
+            // before scrolling, otherwise the ScrollView may end up past the
+            // content and show a blank screen.
+            if force {
+                try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+            }
             guard force || isFollowingLatest else { return }
             if force {
                 isFollowingLatest = true
@@ -247,35 +367,25 @@ struct ChatSessionView: View {
     private var chatHeader: some View {
         HStack(spacing: 12) {
             Button(action: onOpenDrawer) {
-                Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 17, weight: .semibold))
-                    .frame(width: 38, height: 38)
-                    .background(Color.primary.opacity(0.05), in: Circle())
+                Image(systemName: "sidebar.left")
+                    .font(.system(size: 20, weight: .medium))
+                    .frame(width: 44, height: 44)
             }
+            .foregroundStyle(.primary)
             .accessibilityLabel("打开会话列表")
 
             Spacer(minLength: 0)
-            VStack(spacing: 1) {
-                Text(viewModel.title)
-                    .font(.headline)
-                    .lineLimit(1)
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(viewModel.isConnected ? Color.green : Color.secondary)
-                        .frame(width: 5, height: 5)
-                    Text(viewModel.isConnected ? "已连接" : (viewModel.isReconnecting ? "正在重连" : "正在连接"))
-                }
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            }
+            Text(viewModel.title)
+                .font(.headline)
+                .lineLimit(1)
 
             Spacer(minLength: 0)
             Button(action: onNewConversation) {
                 Image(systemName: "square.and.pencil")
-                    .font(.system(size: 17, weight: .semibold))
-                    .frame(width: 38, height: 38)
-                    .background(Color.primary.opacity(0.05), in: Circle())
+                    .font(.system(size: 20, weight: .medium))
+                    .frame(width: 44, height: 44)
             }
+            .foregroundStyle(.primary)
             .accessibilityLabel("新建会话")
         }
         .padding(.horizontal, 12)
@@ -350,7 +460,7 @@ struct ChatSessionView: View {
                 .disabled(viewModel.isStopping)
                 .accessibilityLabel("停止生成")
             } else {
-                Button { composerFocused = false; Task { await viewModel.send() } } label: {
+                Button { composerFocused = false; showUploadOptions = false; Task { await viewModel.send() } } label: {
                     ZStack {
                         Circle().fill(canSend ? Color.accentColor : Color.secondary.opacity(0.25))
                         Image(systemName: "arrow.up")
@@ -365,20 +475,122 @@ struct ChatSessionView: View {
         }
     }
 
+    private func permissionIcon(_ value: String?) -> String {
+        switch value {
+        case "read-only": return "checkmark.shield"
+        case "workspace-write": return "pencil.and.outline"
+        case "danger-full-access": return "exclamationmark.shield"
+        default: return "shield"
+        }
+    }
+
+    private func permissionLabel(_ value: String) -> String {
+        switch value {
+        case "read-only": return "仅可查看"
+        case "workspace-write": return "可写入工作区"
+        case "danger-full-access": return "完全权限"
+        default: return value
+        }
+    }
+
+    private var permissionButton: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showPermissionPicker.toggle()
+            }
+        } label: {
+            Image(systemName: permissionIcon(viewModel.currentPermission))
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
+                .frame(width: 28, height: 28)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var permissionPicker: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(viewModel.permissionOptions, id: \.value) { option in
+                Button {
+                    if option.value == viewModel.currentPermission {
+                        withAnimation(.easeInOut(duration: 0.2)) { showPermissionPicker = false }
+                        return
+                    }
+                    if option.value == "danger-full-access" {
+                        pendingPermissionPreset = option.value
+                    } else {
+                        Task { await viewModel.setPermission(option.value) }
+                        withAnimation(.easeInOut(duration: 0.2)) { showPermissionPicker = false }
+                    }
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: permissionIcon(option.value))
+                            .font(.system(size: 16))
+                            .foregroundStyle(.primary)
+                            .frame(width: 22)
+                        Text(permissionLabel(option.value))
+                            .font(.body)
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        if viewModel.currentPermission == option.value {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                if option.value != viewModel.permissionOptions.last?.value {
+                    Divider().padding(.horizontal, 14)
+                }
+            }
+        }
+        .frame(width: 220)
+        .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(.primary.opacity(0.1), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.15), radius: 16, y: 6)
+    }
+
+    private var isComposerCollapsed: Bool {
+        !composerFocused
+            && viewModel.composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && viewModel.composerAttachments.isEmpty
+            && !showUploadOptions
+    }
+
     private var composer: some View {
         VStack(spacing: 0) {
-            TextField("给 \(viewModel.agentName) 发消息", text: $viewModel.composerText, axis: .vertical)
-                .lineLimit(1...6)
-                .focused($composerFocused)
-                .padding(.horizontal, 15)
-                .padding(.top, 12)
+            // Attachment preview strip
+            ComposerAttachmentStrip(viewModel: viewModel)
 
-            HStack(spacing: 8) {
-                Spacer()
-                if viewModel.canSelectModel {
-                    if let contextUsageRatio = viewModel.contextUsageRatio {
-                        ContextUsageRing(progress: min(max(contextUsageRatio, 0), 1))
+            HStack(alignment: isComposerCollapsed ? .center : .bottom, spacing: 8) {
+                TextField("给 \(viewModel.agentName) 发消息", text: $viewModel.composerText, axis: .vertical)
+                    .lineLimit(1...6)
+                    .focused($composerFocused)
+                if isComposerCollapsed {
+                    sendButton
+                }
+            }
+            .padding(.horizontal, 15)
+            .padding(.vertical, isComposerCollapsed ? 10 : 0)
+            .padding(.top, isComposerCollapsed ? 0 : 11)
+            .padding(.bottom, isComposerCollapsed ? 0 : 4)
+
+            if !isComposerCollapsed {
+                HStack(spacing: 8) {
+                    // + button (left of permission button)
+                    plusButton
+
+                    if !viewModel.permissionOptions.isEmpty {
+                        permissionButton
                     }
+                    Spacer()
                     if let cacheHitRatio = viewModel.cacheHitRatio {
                         Text("缓存 \(Int((cacheHitRatio * 100).rounded()))%")
                             .font(.caption2.weight(.medium))
@@ -386,33 +598,80 @@ struct ChatSessionView: View {
                             .lineLimit(1)
                             .fixedSize(horizontal: true, vertical: false)
                     }
-                    modelSelectorButton
+                    if viewModel.canSelectModel {
+                        modelSelectorButton
+                    }
+                    if let contextUsageRatio = viewModel.contextUsageRatio {
+                        ContextUsageRing(
+                            progress: min(max(contextUsageRatio, 0), 1),
+                            tint: colorScheme == .dark ? .white : .accentColor
+                        )
+                    }
+                    sendButton
                 }
-                sendButton
-            }
-            .padding(.horizontal, 8)
-            .padding(.top, 6)
-            .padding(.bottom, 8)
-        }
-        .background(Color(uiColor: .secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .background(alignment: .bottom) {
-            if viewModel.isRunning {
-                Text("\(viewModel.agentName) 正在处理；如需发送下一条，请先停止当前生成。")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-                    .offset(y: 22)
+                .padding(.horizontal, 8)
+                .padding(.top, 2)
+                .padding(.bottom, 8)
             }
         }
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(.primary.opacity(0.08), lineWidth: 0.5)
+        }
+        .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
         .padding(.horizontal, 12)
         .padding(.top, 4)
-        .padding(.bottom, viewModel.isRunning ? 24 : 6)
-        .background(Color(uiColor: .systemBackground))
+        .padding(.bottom, 6)
+    }
+
+    private var plusButton: some View {
+        Button {
+            withAnimation(.snappy(duration: 0.25)) {
+                showUploadOptions.toggle()
+            }
+        } label: {
+            ZStack {
+                if showUploadOptions {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .frame(width: 28, height: 28)
+                        .background(Color.primary.opacity(0.08), in: Circle())
+                } else {
+                    Image(systemName: "plus")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 28, height: 28)
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: showUploadOptions)
+        }
+        .buttonStyle(.plain)
     }
 
     private var composerWithPopover: some View {
-        composer
+        VStack(spacing: 0) {
+            composer
+
+            if showUploadOptions {
+                UploadOptionsPanel(
+                    onCamera: {
+                        showUploadOptions = false
+                        showCamera = true
+                    },
+                    onPhotoLibrary: {
+                        showUploadOptions = false
+                        showPhotoLibrary = true
+                    },
+                    onFiles: {
+                        showUploadOptions = false
+                        showDocumentPicker = true
+                    }
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
     }
 
     @ViewBuilder
@@ -445,5 +704,6 @@ struct ChatSessionView: View {
 
     private var canSend: Bool {
         !viewModel.composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !viewModel.composerAttachments.isEmpty
     }
 }

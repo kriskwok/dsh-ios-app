@@ -249,6 +249,256 @@ actor HermesRPCClient {
         return try JSONDecoder().decode(JSONValue.self, from: data)
     }
 
+    func httpPost(_ path: String, body: JSONValue) async throws -> JSONValue {
+        var request = URLRequest(url: endpoint(path))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.httpBody = try JSONEncoder().encode(body)
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw HermesClientError.invalidResponse("HTTP 请求没有 HTTP 响应")
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            throw HermesClientError.httpStatus(http.statusCode)
+        }
+        return try JSONDecoder().decode(JSONValue.self, from: data)
+    }
+
+    /// Upload files via multipart/form-data to the hermes-web-ui `/upload`
+    /// Upload files to Hermes Studio's `/upload` endpoint (port 8649).
+    /// The agent API (8650) does not expose a general HTTP upload endpoint
+    /// (only `/v1/artifacts/upload` for browser-control artifacts). Hermes
+    /// Studio uses cookie-based session auth, so we log in via `/api/auth/login`
+    /// first, then upload with the session cookie.
+    func uploadFiles(_ files: [(name: String, data: Data, mimeType: String)]) async throws -> JSONValue {
+        // Ensure WebSocket connection is established (also triggers auth flow).
+        try await connect()
+
+        // Log in to Hermes Studio (8649) to obtain a JWT token.
+        guard !username.isEmpty && !password.isEmpty else {
+            throw HermesClientError.invalidResponse("上传文件需要 Hermes Studio 登录凭据（用户名/密码），请在服务器配置中填写")
+        }
+        let studioToken = try await loginToStudio()
+
+        // Hermes Studio upload endpoint: same host, port 8649.
+        let uploadURL = hermesStudioUploadEndpoint()
+        print("[HermesUpload] endpoint=\(uploadURL.absoluteString) files=\(files.map { $0.name })")
+
+        // Upload each file individually (field name is `file`, singular).
+        var registered: [JSONValue] = []
+        for file in files {
+            let result = try await uploadSingleFile(
+                name: file.name,
+                data: file.data,
+                mimeType: file.mimeType,
+                to: uploadURL,
+                bearerToken: studioToken
+            )
+            if case .object(let dict) = result,
+               case .array(let fileList) = dict["files"] {
+                registered.append(contentsOf: fileList)
+            }
+        }
+        return .object(["files": .array(registered)])
+    }
+
+    /// Log in to Hermes Studio (port 8649) via `/api/auth/login`.
+    /// Returns the JWT access token from the response body.
+    private func loginToStudio() async throws -> String {
+        var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
+        components?.port = 8649
+        components?.path = "/api/auth/login"
+        guard let loginURL = components?.url else {
+            throw HermesClientError.invalidResponse("无法构建 Hermes Studio 登录 URL")
+        }
+
+        let body: JSONValue = .object([
+            "username": .string(username),
+            "password": .string(password),
+        ])
+
+        var request = URLRequest(url: loginURL)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.httpBody = try JSONEncoder().encode(body)
+
+        print("[HermesUpload] logging in to studio: \(loginURL.absoluteString)")
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw HermesClientError.invalidResponse("Hermes Studio 登录没有 HTTP 响应")
+        }
+
+        let preview = String(data: data.prefix(300), encoding: .utf8) ?? "<binary>"
+        print("[HermesUpload] studio login status=\(http.statusCode) body=\(preview.prefix(120))")
+
+        guard (200..<300).contains(http.statusCode) else {
+            throw HermesClientError.authenticationRequired
+        }
+
+        // Parse JWT token from response body: {"token":"...", ...}
+        let value = try JSONDecoder().decode(JSONValue.self, from: data)
+        guard let token = value["token"]?.stringValue, !token.isEmpty else {
+            throw HermesClientError.invalidResponse("Hermes Studio 登录响应中没有 token")
+        }
+        print("[HermesUpload] got studio JWT token (length=\(token.count))")
+        return token
+    }
+
+    private func uploadSingleFile(
+        name: String,
+        data: Data,
+        mimeType: String,
+        to url: URL,
+        bearerToken: String
+    ) async throws -> JSONValue {
+        let boundary = "----hermes-ios-\(UUID().uuidString)"
+        var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(name)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+        body.append(data)
+        body.append("\r\n".data(using: .utf8)!)
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(bearerToken)", forHTTPHeaderField: "Authorization")
+        request.httpBody = body
+
+        print("[HermesUpload] POST \(url.absoluteString) file=\(name) size=\(data.count)")
+
+        let (respData, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw HermesClientError.invalidResponse("上传请求没有 HTTP 响应")
+        }
+        let contentType = http.allHeaderFields["Content-Type"] as? String ?? "unknown"
+        let preview = String(data: respData.prefix(500), encoding: .utf8) ?? "<binary>"
+        print("[HermesUpload] status=\(http.statusCode) contentType=\(contentType) body=\(preview)")
+
+        guard (200..<300).contains(http.statusCode) else {
+            throw HermesClientError.httpStatus(http.statusCode)
+        }
+
+        do {
+            return try JSONDecoder().decode(JSONValue.self, from: respData)
+        } catch {
+            print("[HermesUpload] JSON decode failed: \(error)")
+            throw HermesClientError.invalidResponse("上传接口返回了非 JSON 数据（status=\(http.statusCode), type=\(contentType)）：\(preview)")
+        }
+    }
+
+    /// Hermes Studio upload endpoint: same host as baseURL but on port 8649.
+    private func hermesStudioUploadEndpoint() -> URL {
+        var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
+        components?.port = 8649
+        components?.path = "/upload"
+        return components?.url ?? baseURL.appendingPathComponent("upload")
+    }
+
+    /// Cached Hermes Studio JWT token (avoids re-login on every file fetch).
+    private var cachedStudioToken: String?
+
+    /// Fetch file data from Hermes Studio by server-side path.
+    /// Used to render images/files that were uploaded via Hermes Studio.
+    func fetchFileData(path: String) async throws -> Data {
+        // Reuse cached token if available; otherwise log in.
+        let token: String
+        if let cached = cachedStudioToken {
+            token = cached
+        } else {
+            guard !username.isEmpty && !password.isEmpty else {
+                throw HermesClientError.invalidResponse("获取文件需要 Hermes Studio 登录凭据")
+            }
+            token = try await loginToStudio()
+            cachedStudioToken = token
+        }
+
+        // The /api/hermes/files/preview endpoint requires a path relative to
+        // the profile data directory (e.g. "upload/default/xxx.png").
+        // Uploaded files come back as absolute paths like
+        // "/root/.hermes-web-ui/upload/default/xxx.png". Strip the data
+        // directory prefix to get the relative path.
+        let relativePath: String
+        if let range = path.range(of: ".hermes-web-ui/") {
+            relativePath = String(path[range.upperBound...])
+        } else if path.hasPrefix("/") {
+            // Fallback: strip leading slash and hope it resolves correctly.
+            relativePath = String(path.dropFirst())
+        } else {
+            relativePath = path
+        }
+
+        var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
+        components?.port = 8649
+        components?.path = "/api/hermes/files/preview"
+        components?.queryItems = [URLQueryItem(name: "path", value: relativePath)]
+        guard let url = components?.url else {
+            throw HermesClientError.invalidResponse("无法构建文件读取 URL")
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        print("[HermesFile] fetch path=\(path) relative=\(relativePath)")
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw HermesClientError.invalidResponse("文件读取没有 HTTP 响应")
+        }
+
+        let preview = String(data: data.prefix(200), encoding: .utf8) ?? "<binary>"
+        print("[HermesFile] status=\(http.statusCode) contentType=\(http.value(forHTTPHeaderField: "Content-Type") ?? "n/a") size=\(data.count) body=\(preview.prefix(100))")
+
+        // If token expired, clear cache and retry once.
+        if http.statusCode == 401 {
+            cachedStudioToken = nil
+            let newToken = try await loginToStudio()
+            cachedStudioToken = newToken
+            request.setValue("Bearer \(newToken)", forHTTPHeaderField: "Authorization")
+            let (retryData, retryResponse) = try await session.data(for: request)
+            guard let retryHttp = retryResponse as? HTTPURLResponse,
+                  (200..<300).contains(retryHttp.statusCode) else {
+                throw HermesClientError.httpStatus((retryResponse as? HTTPURLResponse)?.statusCode ?? 0)
+            }
+            print("[HermesFile] fetch success (retry) size=\(retryData.count)")
+            return retryData
+        }
+
+        guard (200..<300).contains(http.statusCode) else {
+            throw HermesClientError.httpStatus(http.statusCode)
+        }
+        print("[HermesFile] fetch success size=\(data.count)")
+        return data
+    }
+
+    /// Extract raw file bytes from the `/api/hermes/files/read` response.
+    /// The response may be raw binary or a JSON wrapper with base64/content.
+    private func extractFileData(_ data: Data) throws -> Data {
+        // Try to parse as JSON: {content: "...", encoding: "base64"} or similar.
+        if let json = try? JSONDecoder().decode(JSONValue.self, from: data) {
+            print("[HermesFile] JSON keys=\(json.objectValue?.keys.joined(separator: ",") ?? "n/a")")
+            if let base64 = json["content"]?.stringValue ?? json["data"]?.stringValue,
+               let decoded = Data(base64Encoded: base64) {
+                print("[HermesFile] extracted from base64 content/data")
+                return decoded
+            }
+            if let bytes = json["bytes"]?.arrayValue {
+                print("[HermesFile] extracted from bytes array")
+                return Data(bytes.compactMap { $0.intValue }.map { UInt8($0 & 0xFF) })
+            }
+            // If JSON has no recognizable data field, return raw data as-is.
+            print("[HermesFile] JSON has no recognizable data field, returning raw")
+        } else {
+            print("[HermesFile] not JSON, returning raw binary size=\(data.count)")
+        }
+        return data
+    }
+
     private func endpoint(_ path: String) -> URL {
         path.split(separator: "/").reduce(baseURL) { url, part in
             url.appendingPathComponent(String(part))

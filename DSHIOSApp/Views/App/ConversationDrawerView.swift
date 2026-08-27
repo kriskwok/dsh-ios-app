@@ -18,6 +18,8 @@ struct ConversationDrawerView: View {
     let onRefresh: () async -> Void
     let onOpenSettings: () -> Void
     let onSelectServer: (ServerProfile) -> Void
+    let onRenameSession: (AgentSessionSummary) -> Void
+    let onArchiveSession: (AgentSessionSummary) -> Void
 
     @State private var collapsedWorkspaceIDs: Set<String> = []
     @State private var collapsedChannelIDs: Set<String> = ["automation"]
@@ -105,6 +107,8 @@ struct ConversationDrawerView: View {
                     .padding(.horizontal, 6)
                 }
                 .scrollDisabled(isDrawerGestureActive)
+                .disabled(isDrawerGestureActive)
+                .allowsHitTesting(!isDrawerGestureActive)
                 .refreshable { await onRefresh() }
 
                 HStack(spacing: 12) {
@@ -134,11 +138,11 @@ struct ConversationDrawerView: View {
                 }
                 .padding(.leading, horizontalPadding)
                 .padding(.trailing, horizontalPadding)
-                .padding(.bottom, 12)
+                .padding(.bottom, 24)
                 .safeAreaPadding(.bottom, 8)
             }
         }
-        .background(Color(uiColor: .secondarySystemBackground))
+        .background(Color(uiColor: .secondarySystemBackground).ignoresSafeArea())
         .ignoresSafeArea(edges: .bottom)
     }
 
@@ -444,6 +448,18 @@ struct ConversationDrawerView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button {
+                onRenameSession(session)
+            } label: {
+                Label("重命名", systemImage: "pencil")
+            }
+            Button(role: .destructive) {
+                onArchiveSession(session)
+            } label: {
+                Label("归档", systemImage: "archivebox")
+            }
+        }
     }
 
 }

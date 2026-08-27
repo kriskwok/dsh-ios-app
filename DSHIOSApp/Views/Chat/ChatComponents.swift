@@ -33,6 +33,7 @@ struct StreamingCursor: View {
 
 struct ContextUsageRing: View {
     let progress: Double
+    var tint: Color = .accentColor
 
     var body: some View {
         ZStack {
@@ -40,7 +41,7 @@ struct ContextUsageRing: View {
                 .stroke(Color.primary.opacity(0.16), lineWidth: 2)
             Circle()
                 .trim(from: 0, to: progress)
-                .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                .stroke(tint, style: StrokeStyle(lineWidth: 2, lineCap: .round))
                 .rotationEffect(.degrees(-90))
         }
         .frame(width: 14, height: 14)

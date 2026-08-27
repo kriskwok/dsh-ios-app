@@ -402,13 +402,7 @@ struct MarkdownBlockView: View {
     }
 
     private func inlineText(_ text: String) -> some View {
-        let value = (try? AttributedString(
-            markdown: text,
-            options: .init(
-                interpretedSyntax: .inlineOnlyPreservingWhitespace,
-                failurePolicy: .returnPartiallyParsedIfPossible
-            )
-        )) ?? AttributedString(text)
+        let value = MarkdownInlineParser.parse(text)
         return Text(value)
             .font(.body)
             .foregroundStyle(.primary)
@@ -602,42 +596,223 @@ struct MarkdownTableView: View {
     let headers: [String]
     let rows: [[String]]
 
-    private let columnWidth: CGFloat = 128
+    private var columnCount: Int {
+        max(headers.count, rows.map(\.count).max() ?? 0)
+    }
+
+    /// Column width wide enough for typical table content; table scrolls
+    /// horizontally when there are more columns than fit on screen.
+    private let columnWidth: CGFloat = 160
 
     var body: some View {
-        let columnCount = max(headers.count, rows.map(\.count).max() ?? 0)
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyVGrid(
-                columns: Array(repeating: GridItem(.fixed(columnWidth), spacing: 0), count: max(1, columnCount)),
-                spacing: 0
-            ) {
-                ForEach(0..<(max(1, columnCount) * (rows.count + 1)), id: \.self) { index in
-                    let row = index / max(1, columnCount)
-                    let column = index % max(1, columnCount)
-                    let cells = row == 0 ? headers : rows[row - 1]
-                    let text = column < cells.count ? cells[column] : ""
-                    Text(markdownTableValue(text))
-                        .font(row == 0 ? .subheadline.weight(.semibold) : .subheadline)
-                        .multilineTextAlignment(.leading)
-                        .frame(width: columnWidth, alignment: .leading)
-                        .padding(8)
-                        .background(row == 0 ? Color.primary.opacity(0.08) : Color.clear)
-                        .overlay {
-                            Rectangle().stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
-                        }
+        ScrollView(.horizontal, showsIndicators: true) {
+            VStack(alignment: .leading, spacing: 0) {
+                tableRow(headers, isHeader: true, rowIndex: -1)
+                ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
+                    tableRow(row, isHeader: false, rowIndex: index)
                 }
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
     }
 
+    private func tableRow(_ cells: [String], isHeader: Bool, rowIndex: Int) -> some View {
+        HStack(alignment: .top, spacing: 0) {
+            ForEach(0..<max(1, columnCount), id: \.self) { col in
+                let text = col < cells.count ? cells[col] : ""
+                Text(markdownTableValue(text))
+                    .font(isHeader ? .subheadline.weight(.semibold) : .subheadline)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .frame(width: columnWidth, alignment: .topLeading)
+                    .background(rowBackground(isHeader: isHeader, rowIndex: rowIndex))
+                    .overlay(alignment: .trailing) {
+                        // Vertical separator between columns
+                        Rectangle()
+                            .fill(Color.primary.opacity(0.08))
+                            .frame(width: 0.5)
+                    }
+            }
+        }
+        .overlay(alignment: .bottom) {
+            // Horizontal separator below each row
+            Rectangle()
+                .fill(Color.primary.opacity(0.08))
+                .frame(height: 0.5)
+        }
+    }
+
+    private func rowBackground(isHeader: Bool, rowIndex: Int) -> Color {
+        if isHeader {
+            return Color.primary.opacity(0.08)
+        }
+        // Zebra striping for readability
+        return rowIndex % 2 == 0 ? Color.clear : Color.primary.opacity(0.03)
+    }
+
     private func markdownTableValue(_ text: String) -> AttributedString {
-        (try? AttributedString(
-            markdown: text,
-            options: .init(
-                interpretedSyntax: .inlineOnlyPreservingWhitespace,
-                failurePolicy: .returnPartiallyParsedIfPossible
-            )
-        )) ?? AttributedString(text)
+        MarkdownInlineParser.parse(text)
+    }
+}
+
+// MARK: - Inline Markdown Parser
+
+/// A lightweight inline markdown parser that handles inline code, bold, italic,
+/// strikethrough, and links. More robust than `AttributedString(markdown:)` for
+/// partial / streaming content and gives explicit control over inline-code styling.
+enum MarkdownInlineParser {
+    static func parse(_ text: String) -> AttributedString {
+        var result = AttributedString()
+        var i = text.startIndex
+        while i < text.endIndex {
+            if let (seg, next) = scanInlineCode(text, from: i) {
+                result.append(seg); i = next; continue
+            }
+            if let (seg, next) = scanStrikethrough(text, from: i) {
+                result.append(seg); i = next; continue
+            }
+            if let (seg, next) = scanBold(text, from: i) {
+                result.append(seg); i = next; continue
+            }
+            if let (seg, next) = scanItalic(text, from: i) {
+                result.append(seg); i = next; continue
+            }
+            if let (seg, next) = scanLink(text, from: i) {
+                result.append(seg); i = next; continue
+            }
+            // Accumulate plain-text runs to avoid per-character attribute overhead.
+            var j = i
+            while j < text.endIndex {
+                let ch = text[j]
+                if ch == "`" || ch == "~" || ch == "*" || ch == "_" || ch == "[" { break }
+                j = text.index(after: j)
+            }
+            if j == i { j = text.index(after: i) }
+            result.append(AttributedString(String(text[i..<j])))
+            i = j
+        }
+        return result
+    }
+
+    // MARK: Pattern scanners
+
+    /// Inline code: `` `code` `` — content is literal, no nested parsing.
+    private static func scanInlineCode(_ text: String, from i: String.Index) -> (AttributedString, String.Index)? {
+        guard text[i] == "`" else { return nil }
+        let contentStart = text.index(after: i)
+        guard let end = text[contentStart...].firstIndex(of: "`") else { return nil }
+        let code = String(text[contentStart..<end])
+        var attr = AttributedString(code)
+        attr.font = .system(.callout, design: .monospaced)
+        attr.backgroundColor = Color.secondary.opacity(0.15)
+        attr.foregroundColor = Color.primary
+        return (attr, text.index(after: end))
+    }
+
+    /// Strikethrough: `~~text~~`
+    private static func scanStrikethrough(_ text: String, from i: String.Index) -> (AttributedString, String.Index)? {
+        guard text[i] == "~" else { return nil }
+        let next = text.index(after: i)
+        guard next < text.endIndex, text[next] == "~" else { return nil }
+        let contentStart = text.index(after: next)
+        guard let end = findClosing(text, from: contentStart, marker: "~~") else { return nil }
+        var attr = parse(String(text[contentStart..<end]))
+        attr.strikethroughStyle = .single
+        return (attr, text.index(end, offsetBy: 2))
+    }
+
+    /// Bold: `**text**` or `__text__`
+    private static func scanBold(_ text: String, from i: String.Index) -> (AttributedString, String.Index)? {
+        let ch = text[i]
+        guard ch == "*" || ch == "_" else { return nil }
+        let next = text.index(after: i)
+        guard next < text.endIndex, text[next] == ch else { return nil }
+        let marker = String(ch) + String(ch)
+        let contentStart = text.index(next, offsetBy: 1)
+        guard let end = findClosing(text, from: contentStart, marker: marker) else { return nil }
+        var attr = parse(String(text[contentStart..<end]))
+        attr.font = .body.weight(.bold)
+        return (attr, text.index(end, offsetBy: 2))
+    }
+
+    /// Italic: `*text*` or `_text_` (underscore only at word boundaries).
+    private static func scanItalic(_ text: String, from i: String.Index) -> (AttributedString, String.Index)? {
+        let ch = text[i]
+        guard ch == "*" || ch == "_" else { return nil }
+        // Avoid matching the first char of ** or __
+        let next = text.index(after: i)
+        guard next >= text.endIndex || text[next] != ch else { return nil }
+        // Underscore italic requires word boundary on the left.
+        if ch == "_" {
+            let prev = text.index(before: i)
+            if i > text.startIndex, text[prev].isLetter || text[prev].isNumber { return nil }
+        }
+        let contentStart = next
+        guard let end = findClosingSingle(text, from: contentStart, marker: ch) else { return nil }
+        // Underscore italic requires word boundary on the right of content.
+        if ch == "_" {
+            let after = text.index(after: end)
+            if after < text.endIndex, text[after].isLetter || text[after].isNumber { return nil }
+        }
+        var attr = parse(String(text[contentStart..<end]))
+        attr.font = .body.italic()
+        return (attr, text.index(after: end))
+    }
+
+    /// Link: `[text](url)`
+    private static func scanLink(_ text: String, from i: String.Index) -> (AttributedString, String.Index)? {
+        guard text[i] == "[" else { return nil }
+        let contentStart = text.index(after: i)
+        guard let closeBracket = text[contentStart...].firstIndex(of: "]") else { return nil }
+        let afterBracket = text.index(after: closeBracket)
+        guard afterBracket < text.endIndex, text[afterBracket] == "(" else { return nil }
+        let urlStart = text.index(after: afterBracket)
+        guard let closeParen = text[urlStart...].firstIndex(of: ")") else { return nil }
+        let urlString = String(text[urlStart..<closeParen]).trimmingCharacters(in: .whitespaces)
+        guard !urlString.isEmpty else { return nil }
+        let label = String(text[contentStart..<closeBracket])
+        var attr = parse(label)
+        if let url = URL(string: urlString) {
+            attr.link = url
+        }
+        attr.foregroundColor = Color.accentColor
+        attr.underlineStyle = .single
+        return (attr, text.index(after: closeParen))
+    }
+
+    // MARK: Helpers
+
+    /// Find the next occurrence of a two-char marker (e.g. `**`, `~~`).
+    private static func findClosing(_ text: String, from start: String.Index, marker: String) -> String.Index? {
+        var i = start
+        while i < text.endIndex {
+            if text[i] == marker.first {
+                let next = text.index(after: i)
+                if next < text.endIndex, text[next] == marker.last { return i }
+            }
+            i = text.index(after: i)
+        }
+        return nil
+    }
+
+    /// Find the next single-char marker that is not part of a double marker.
+    private static func findClosingSingle(_ text: String, from start: String.Index, marker: Character) -> String.Index? {
+        var i = start
+        while i < text.endIndex {
+            if text[i] == marker {
+                let next = text.index(after: i)
+                // Skip double markers (they belong to bold/strikethrough).
+                if next < text.endIndex, text[next] == marker {
+                    i = text.index(after: next)
+                    continue
+                }
+                return i
+            }
+            i = text.index(after: i)
+        }
+        return nil
     }
 }

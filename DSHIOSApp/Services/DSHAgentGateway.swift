@@ -34,15 +34,15 @@ final class DSHAgentGateway: AgentGateway, @unchecked Sendable {
             method: "session.history",
             payload: ["sessionId": .string(session.id), "maxMessages": .number(80)]
         )
-        // TEMP DEBUG: dump keys and key objects
-        for key in (result.value.objectValue ?? [:]).keys.sorted() {
-            print("[DEBUG-DSH-HIST] key:", key)
-        }
-        if let cp = result.value["contextPressure"] { debugPrint("[DEBUG-DSH-HIST] contextPressure:", cp) }
-        if let tu = result.value["tokenUsage"] { debugPrint("[DEBUG-DSH-HIST] tokenUsage:", tu) }
         let history = try DSHHistoryPage(json: result.value)
         var projector = ConversationProjector()
         projector.replace(with: history.events)
+        let permissions = result.value["projections"]?["values"]?["permissions"]
+        let permissionOptions = permissions?["options"]?.arrayValue?.compactMap { opt -> AgentPermissionOption? in
+            guard let value = opt["value"]?.stringValue else { return nil }
+            return AgentPermissionOption(value: value, name: opt["name"]?.stringValue ?? value)
+        }
+        let currentPermission = permissions?["currentValue"]?.stringValue
         return AgentConversationContext(
             runtimeSessionID: session.id,
             session: session,
@@ -50,8 +50,22 @@ final class DSHAgentGateway: AgentGateway, @unchecked Sendable {
             title: history.title?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? session.title,
             isRunning: Self.runningState(from: history.events, fallback: session.isRunning),
             currentModel: nil,
-            metrics: AgentSessionMetrics(json: result.value)
+            metrics: Self.metrics(from: result.value),
+            permissionOptions: permissionOptions,
+            currentPermission: currentPermission
         )
+    }
+
+    /// Extract session metrics from a history response.
+    /// DSH exposes tokenUsage / contextPressure as session projections under
+    /// `projections.values`, alongside `title`.
+    private static func metrics(from history: JSONValue) -> AgentSessionMetrics? {
+        if let projections = history["projections"]?["values"],
+           let m = AgentSessionMetrics(json: projections) {
+            return m
+        }
+        // Fallback: top-level fields (other server shapes).
+        return AgentSessionMetrics(json: history)
     }
 
     func createSession(in workspace: AgentWorkspace?) async throws -> AgentConversationContext {
@@ -77,20 +91,133 @@ final class DSHAgentGateway: AgentGateway, @unchecked Sendable {
     }
 
     func send(text: String, sessionID: String, requestID: String) async throws {
+        try await send(images: [], text: text, sessionID: sessionID, requestID: requestID)
+    }
+
+    func send(images: [ImageContentBlock], text: String, sessionID: String, requestID: String) async throws {
+        var content: [JSONValue] = []
+        for img in images {
+            content.append(.object([
+                "type": .string("image"),
+                "mediaType": .string(img.mediaType),
+                "data": .string(img.data.base64EncodedString()),
+                "name": .string(img.name)
+            ]))
+        }
+        if !text.isEmpty {
+            content.append(.object(["type": .string("text"), "text": .string(text)]))
+        }
         _ = try await client.call(
             method: "session.prompt",
             payload: [
                 "sessionId": .string(sessionID),
                 "mode": .string("queue"),
-                "content": .array([.object(["type": .string("text"), "text": .string(text)])]),
+                "content": .array(content),
                 "clientTimeZone": .string(TimeZone.current.identifier)
             ],
             rpcId: requestID
         )
     }
 
+    func fetchAttachment(sessionID: String, attachmentId: String) async throws -> Data {
+        print("[Attachment] fetch session=\(sessionID) id=\(attachmentId)")
+        let data = try await client.callRawData(
+            method: "session.attachment",
+            payload: [
+                "sessionId": .string(sessionID),
+                "attachmentId": .string(attachmentId)
+            ]
+        )
+        print("[Attachment] response bytes=\(data.count) prefix=\(data.prefix(20).map { String(format: "%02x", $0) }.joined())")
+
+        // The response may be:
+        // 1. Raw binary data (image bytes directly)
+        // 2. A JSON RPC envelope with base64 in result.value
+        // 3. A JSON object with a "data" field containing base64
+        // Try JSON parsing first; if it fails, treat as raw binary.
+        if let envelope = try? JSONDecoder().decode(DSHRPCResponse.self, from: data),
+           envelope.result.ok {
+            if let base64 = envelope.result.value?.stringValue,
+               let decoded = Data(base64Encoded: base64) {
+                print("[Attachment] decoded from value.stringValue, \(decoded.count) bytes")
+                return decoded
+            }
+            if let base64 = envelope.result.value?["data"]?.stringValue,
+               let decoded = Data(base64Encoded: base64) {
+                print("[Attachment] decoded from value[data], \(decoded.count) bytes")
+                return decoded
+            }
+            print("[Attachment] envelope ok but no recognizable data field, valueKeys=\(envelope.result.value?.objectValue?.keys.map { $0 } ?? [])")
+        }
+
+        // Try parsing as a plain JSON object with data field (non-envelope).
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let base64 = json["data"] as? String,
+           let decoded = Data(base64Encoded: base64) {
+            print("[Attachment] decoded from plain json[data], \(decoded.count) bytes")
+            return decoded
+        }
+
+        // Fallback: treat the entire response body as raw binary data.
+        // UIImage can be created from valid image data regardless of format.
+        if !data.isEmpty {
+            print("[Attachment] using raw binary fallback, \(data.count) bytes")
+            return data
+        }
+
+        throw DSHClientError.invalidResponse("session.attachment 返回了空数据或无法识别的格式")
+    }
+
     func cancel(sessionID: String) async throws {
         _ = try await client.call(method: "session.cancel", payload: ["sessionId": .string(sessionID)])
+    }
+
+    func setPermission(sessionID: String, preset: String) async throws {
+        let agentId = sessionID.hasPrefix("session-") ? sessionID : "session-\(sessionID)"
+        _ = try await client.call(
+            method: "commands/execute",
+            payload: [
+                "args": .object([
+                    "agentId": .string(agentId),
+                    "line": .string("/permission \(preset)"),
+                    "images": .array([])
+                ])
+            ]
+        )
+    }
+
+    func renameSession(_ sessionID: String, title: String) async throws {
+        print("[DSH-Manage] rename session=\(sessionID) title=\(title)")
+        do {
+            _ = try await client.call(
+                method: "session.rename",
+                payload: [
+                    "sessionId": .string(sessionID),
+                    "title": .string(title)
+                ]
+            )
+            print("[DSH-Manage] rename success")
+        } catch {
+            print("[DSH-Manage] rename failed: \(error)")
+            throw error
+        }
+    }
+
+    func archiveSession(_ sessionID: String, archived: Bool) async throws {
+        print("[DSH-Manage] archive session=\(sessionID) archived=\(archived)")
+        do {
+            let result = try await client.call(
+                method: "workspace.archiveSession",
+                payload: [
+                    "sessionId": .string(sessionID),
+                    "archived": .bool(archived)
+                ]
+            )
+            print("[DSH-Manage] archive success: \(result.value)")
+        } catch {
+            print("[DSH-Manage] archive failed: \(error)")
+            throw error
+        }
     }
 
     func respond(to approval: AgentApprovalRequest, choice: AgentApprovalChoice) async throws {
@@ -150,15 +277,6 @@ final class DSHAgentGateway: AgentGateway, @unchecked Sendable {
                         continuation.yield(.connected)
                         if let event = try Self.mapMux(request) {
                             continuation.yield(event)
-                            // Extract usage metrics from assistant/message events
-                            if case "session/event" = request.method,
-                               request.payload["event"]?["type"]?.stringValue == "assistant/message",
-                               let sessionID = request.payload["sessionId"]?.stringValue,
-                               let usage = request.payload["event"]?["message"]?["usage"]
-                                    ?? request.payload["event"]?["usage"],
-                               let metrics = AgentSessionMetrics(json: usage) {
-                                continuation.yield(.sessionMetrics(sessionID: sessionID, metrics: metrics))
-                            }
                         }
                     }
                 } catch {
@@ -350,6 +468,8 @@ final class DSHAgentGateway: AgentGateway, @unchecked Sendable {
             switch event.type {
             case "user/message":
                 let text = textContent(event.data["content"])
+                // Slash commands (e.g. /permission) are not real user messages; skip them.
+                guard !text.hasPrefix("/") else { return nil }
                 return .userCommitted(
                     sessionID: sessionID,
                     requestID: event.data["source"]?["rpcId"]?.stringValue,
@@ -373,14 +493,14 @@ final class DSHAgentGateway: AgentGateway, @unchecked Sendable {
                 default: return nil
                 }
             case "assistant/message":
-                print("[DEBUG-DSH-AM] usage:", event.data["usage"] ?? "nil")
                 let message = event.data["message"] ?? event.data
                 let content = splitContent(message["content"])
                 return .assistantComplete(
                     sessionID: sessionID,
                     messageKey: ConversationProjector.optionalStepKey(event.data),
                     text: content.text,
-                    reasoning: content.reasoning
+                    reasoning: content.reasoning,
+                    attachments: content.attachments
                 )
             case "tool/call":
                 return .toolStarted(
@@ -398,13 +518,26 @@ final class DSHAgentGateway: AgentGateway, @unchecked Sendable {
                 )
             case "turn/start": return .running(sessionID: sessionID, value: true)
             case "turn/end": return .running(sessionID: sessionID, value: false)
+            case "permission/preset":
+                if let preset = event.data["preset"]?.stringValue {
+                    return .permissionChanged(sessionID: sessionID, preset: preset)
+                }
+                return nil
             default: return nil
             }
         case "session/projection":
-            guard request.payload["key"]?.stringValue == "title",
-                  let sessionID = request.payload["sessionId"]?.stringValue,
-                  let value = request.payload["value"]?.stringValue else { return nil }
-            return .title(sessionID: sessionID, value: value)
+            guard let sessionID = request.payload["sessionId"]?.stringValue,
+                  let key = request.payload["key"]?.stringValue,
+                  let value = request.payload["value"] else { return nil }
+            if key == "title", let title = value.stringValue {
+                return .title(sessionID: sessionID, value: title)
+            }
+            // tokenUsage / contextPressure are session-level metrics projections.
+            if key == "tokenUsage" || key == "contextPressure",
+               let metrics = AgentSessionMetrics(json: .object([key: value])) {
+                return .sessionMetrics(sessionID: sessionID, metrics: metrics)
+            }
+            return nil
         case "stream/error":
             return .failure(request.payload["message"]?.stringValue ?? "实时连接发生错误")
         default:
@@ -434,18 +567,69 @@ final class DSHAgentGateway: AgentGateway, @unchecked Sendable {
         splitContent(value).text
     }
 
-    private static func splitContent(_ value: JSONValue?) -> (text: String, reasoning: String) {
+    private static func splitContent(_ value: JSONValue?) -> (text: String, reasoning: String, attachments: [MessageAttachment]) {
         var texts: [String] = []
         var reasoning: [String] = []
+        var attachments: [MessageAttachment] = []
         for block in value?.arrayValue ?? [] {
-            guard let text = block["text"]?.stringValue, !text.isEmpty else { continue }
-            if block["type"]?.stringValue == "reasoning" {
-                reasoning.append(text)
-            } else if block["type"]?.stringValue == "text" {
+            let type = block["type"]?.stringValue
+            if type == "text", let text = block["text"]?.stringValue, !text.isEmpty {
                 texts.append(text)
+            } else if type == "reasoning", let text = block["text"]?.stringValue, !text.isEmpty {
+                reasoning.append(text)
+            } else if type == "image" {
+                let att = block["attachment"]?.objectValue
+                func field(_ key: String) -> JSONValue? {
+                    if let att, let v = att[key] { return v }
+                    return block[key]
+                }
+                let attachmentId = field("attachmentId")?.stringValue
+                let rawId = block["id"]?.stringValue
+                let id = attachmentId ?? rawId ?? UUID().uuidString
+                let name = field("name")?.stringValue ?? "image.png"
+                let mediaType = field("mediaType")?.stringValue ?? "image/png"
+                let base64Data = field("data")?.stringValue
+                let size: Int64 = {
+                    if let bytes = field("bytes")?.intValue { return Int64(bytes) }
+                    if let bytes = field("size")?.intValue { return Int64(bytes) }
+                    if let base64 = base64Data { return Int64(base64.count * 3 / 4) }
+                    return 0
+                }()
+                attachments.append(MessageAttachment(
+                    id: id,
+                    kind: .image,
+                    name: name,
+                    size: size,
+                    mimeType: mediaType,
+                    attachmentId: attachmentId,
+                    base64Data: base64Data
+                ))
+            } else if type == "file" {
+                let att = block["attachment"]?.objectValue
+                func field(_ key: String) -> JSONValue? {
+                    if let att, let v = att[key] { return v }
+                    return block[key]
+                }
+                let attachmentId = field("attachmentId")?.stringValue
+                let rawId = block["id"]?.stringValue
+                let id = attachmentId ?? rawId ?? UUID().uuidString
+                let name = field("name")?.stringValue ?? "file"
+                let size = Int64(field("bytes")?.intValue ?? field("size")?.intValue ?? 0)
+                attachments.append(MessageAttachment(
+                    id: id,
+                    kind: .file,
+                    name: name,
+                    size: size,
+                    mimeType: field("mediaType")?.stringValue,
+                    attachmentId: attachmentId
+                ))
             }
         }
-        return (texts.joined(separator: "\n\n"), reasoning.joined(separator: "\n\n"))
+        return (
+            texts.joined(separator: "\n\n"),
+            reasoning.joined(separator: "\n\n"),
+            attachments
+        )
     }
 
     private static func toolCommand(from arguments: String?) -> String? {

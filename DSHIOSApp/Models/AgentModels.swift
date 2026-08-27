@@ -156,6 +156,13 @@ struct AgentConversationContext: Sendable {
     let isRunning: Bool
     var currentModel: AgentModelSelection?
     var metrics: AgentSessionMetrics?
+    var permissionOptions: [AgentPermissionOption]? = nil
+    var currentPermission: String? = nil
+}
+
+struct AgentPermissionOption: Equatable, Codable, Sendable {
+    let value: String
+    let name: String
 }
 
 struct AgentSessionMetrics: Equatable, Sendable {
@@ -182,22 +189,32 @@ struct AgentSessionMetrics: Equatable, Sendable {
     }
 
     private static func contextFromDSHPressure(in value: JSONValue) -> Double? {
-        guard let pressure = value["contextPressure"] else { return nil }
-        let projected = pressure["projectedTokens"]?.doubleValue
-        let window = pressure["contextWindow"]?.doubleValue
-        if let projected, let window, window > 0 { return projected / window }
+        // DSH usage object may carry contextPressure nested, or the fields
+        // directly at top level (event usage shape).
+        if let ratio = dshContextRatio(from: value) { return ratio }
+        if let pressure = value["contextPressure"], let ratio = dshContextRatio(from: pressure) { return ratio }
         return nil
     }
 
+    private static func dshContextRatio(from value: JSONValue) -> Double? {
+        guard let projected = value["projectedTokens"]?.doubleValue,
+              let window = value["contextWindow"]?.doubleValue, window > 0 else { return nil }
+        return projected / window
+    }
+
     private static func cacheFromDSHTokenUsage(in value: JSONValue) -> Double? {
-        guard let usage = value["tokenUsage"] else { return nil }
-        let cached = usage["cacheReadTokens"]?.doubleValue
-        let uncached = usage["uncachedInputTokens"]?.doubleValue
-        if let cached, let uncached {
-            let total = cached + uncached
-            if total > 0 { return cached / total }
-        }
+        // DSH usage object may carry tokenUsage nested, or the fields
+        // directly at top level (event usage shape).
+        if let ratio = dshCacheRatio(from: value) { return ratio }
+        if let usage = value["tokenUsage"], let ratio = dshCacheRatio(from: usage) { return ratio }
         return nil
+    }
+
+    private static func dshCacheRatio(from value: JSONValue) -> Double? {
+        guard let cached = value["cacheReadTokens"]?.doubleValue,
+              let uncached = value["uncachedInputTokens"]?.doubleValue else { return nil }
+        let total = cached + uncached
+        return total > 0 ? cached / total : nil
     }
 
     func merging(_ newer: AgentSessionMetrics?) -> AgentSessionMetrics {
@@ -213,8 +230,8 @@ struct AgentSessionMetrics: Equatable, Sendable {
         if let ratio = Self.directRatio(value, keys: ["context_percent", "contextPercent", "contextUsage", "context_usage"]) {
             return ratio
         }
-        // Try inside nested containers
-        let containers = [value["usage"], value["tokenUsage"], value["token_usage"], value["tokens"]]
+        // Try inside nested containers (Hermes puts session metadata under `info`)
+        let containers = [value["info"], value["usage"], value["tokenUsage"], value["token_usage"], value["tokens"]]
         for container in containers {
             if let container, let ratio = Self.directRatio(container, keys: ["context_percent", "contextPercent", "contextUsage", "context_usage"]) {
                 return ratio
@@ -232,8 +249,8 @@ struct AgentSessionMetrics: Equatable, Sendable {
         if let ratio = Self.directRatio(value, keys: ["cacheHitRate", "cache_hit_rate", "cacheHit", "cache_hit", "cachedTokensRatio"]) {
             return ratio
         }
-        // Try inside nested containers
-        let containers = [value["usage"], value["tokenUsage"], value["token_usage"], value["tokens"]]
+        // Try inside nested containers (Hermes puts session metadata under `info`)
+        let containers = [value["info"], value["usage"], value["tokenUsage"], value["token_usage"], value["tokens"]]
         for container in containers {
             if let container {
                 if let ratio = Self.directRatio(container, keys: ["cacheHitRate", "cache_hit_rate", "cacheHit", "cache_hit", "cachedTokensRatio"]) {
@@ -251,7 +268,7 @@ struct AgentSessionMetrics: Equatable, Sendable {
     }
 
     private static func contextRatioFromTokens(in value: JSONValue) -> Double? {
-        let containers = [value["usage"], value["tokenUsage"], value["token_usage"], value["tokens"]]
+        let containers = [value["info"], value["usage"], value["tokenUsage"], value["token_usage"], value["tokens"]]
         for container in containers {
             guard let container else { continue }
             let numerator = firstNumber(container, keys: ["context_used", "contextUsed", "context_tokens", "contextTokens"], allowingZero: true)
@@ -349,7 +366,7 @@ enum AgentGatewayEvent: Sendable {
     case connected
     case userCommitted(sessionID: String, requestID: String?, text: String?)
     case assistantDelta(sessionID: String, messageKey: String?, text: String, reasoning: Bool)
-    case assistantComplete(sessionID: String, messageKey: String?, text: String, reasoning: String)
+    case assistantComplete(sessionID: String, messageKey: String?, text: String, reasoning: String, attachments: [MessageAttachment] = [])
     case toolStarted(sessionID: String, id: String, name: String, detail: String?)
     case toolCompleted(sessionID: String, id: String, name: String?)
     case title(sessionID: String, value: String)
@@ -359,6 +376,7 @@ enum AgentGatewayEvent: Sendable {
     case questionRequested(AgentQuestionRequest)
     case questionResolved(sessionID: String, questionRpcId: String, outcome: String)
     case sessionMetrics(sessionID: String, metrics: AgentSessionMetrics)
+    case permissionChanged(sessionID: String, preset: String)
     case failure(String)
 }
 
@@ -368,6 +386,7 @@ protocol AgentGateway: AnyObject, Sendable {
     func openSession(_ session: AgentSessionSummary) async throws -> AgentConversationContext
     func createSession(in workspace: AgentWorkspace?) async throws -> AgentConversationContext
     func send(text: String, sessionID: String, requestID: String) async throws
+    func send(images: [ImageContentBlock], text: String, sessionID: String, requestID: String) async throws
     func cancel(sessionID: String) async throws
     func respond(to approval: AgentApprovalRequest, choice: AgentApprovalChoice) async throws
     func respond(to question: AgentQuestionRequest, answers: [AgentQuestionAnswer]) async throws
@@ -376,6 +395,10 @@ protocol AgentGateway: AnyObject, Sendable {
     func close()
     func fetchModels(sessionID: String) async throws -> AgentModelCatalog
     func selectModel(_ selection: AgentModelSelection, sessionID: String) async throws -> AgentModelSelection?
+    func setPermission(sessionID: String, preset: String) async throws
+    func fetchAttachment(sessionID: String, attachmentId: String) async throws -> Data
+    func renameSession(_ sessionID: String, title: String) async throws
+    func archiveSession(_ sessionID: String, archived: Bool) async throws
 }
 
 extension AgentGateway {
@@ -385,6 +408,42 @@ extension AgentGateway {
 
     func respondCancelled(to question: AgentQuestionRequest) async throws {
         throw AgentGatewayUnsupportedError()
+    }
+
+    func setPermission(sessionID: String, preset: String) async throws {
+        throw AgentGatewayUnsupportedError()
+    }
+
+    /// Default multimodal send: fall back to text-only (attachments are
+    /// described in the text by the caller). Gateways that support native
+    /// content arrays (DSH) should override this.
+    func send(images: [ImageContentBlock], text: String, sessionID: String, requestID: String) async throws {
+        try await send(text: text, sessionID: sessionID, requestID: requestID)
+    }
+
+    func fetchAttachment(sessionID: String, attachmentId: String) async throws -> Data {
+        throw AgentGatewayUnsupportedError()
+    }
+
+    func renameSession(_ sessionID: String, title: String) async throws {
+        throw AgentGatewayUnsupportedError()
+    }
+
+    func archiveSession(_ sessionID: String, archived: Bool) async throws {
+        throw AgentGatewayUnsupportedError()
+    }
+}
+
+/// An image block to be sent as part of a multimodal prompt.
+struct ImageContentBlock: Sendable {
+    let data: Data
+    let name: String
+    let mediaType: String
+
+    init(data: Data, name: String, mediaType: String) {
+        self.data = data
+        self.name = name
+        self.mediaType = mediaType
     }
 }
 

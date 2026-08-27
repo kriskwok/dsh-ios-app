@@ -142,6 +142,34 @@ final class DSHAPIClient: @unchecked Sendable {
         return DSHCallResult(rpcId: rpcId, value: envelope.result.value ?? .null)
     }
 
+    /// Send an RPC request and return the raw response body without JSON parsing.
+    /// Used for endpoints that may return binary data (e.g. session.attachment).
+    func callRawData(
+        method: String,
+        payload: [String: JSONValue] = [:],
+        rpcId: String = UUID().uuidString
+    ) async throws -> Data {
+        let body: JSONValue = .object([
+            "type": .string("client-request"),
+            "rpcId": .string(rpcId),
+            "method": .string(method),
+            "payload": .object(payload)
+        ])
+        var request = authenticatedRequest(url: endpoint(method), method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw DSHClientError.invalidResponse("没有 HTTP 响应")
+        }
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            let body = String(data: data.prefix(1_000), encoding: .utf8) ?? ""
+            throw DSHClientError.httpStatus(httpResponse.statusCode, body)
+        }
+        return data
+    }
+
     func respond(rpcId: String, value: [String: JSONValue]) async throws {
         let body: JSONValue = .object([
             "type": .string("client-response"),

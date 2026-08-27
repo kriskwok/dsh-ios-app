@@ -1,9 +1,12 @@
 import Foundation
+import UIKit
 
 @MainActor
 final class ChatSessionViewModel: ObservableObject {
     @Published private(set) var messages: [ConversationMessage] = []
     @Published var composerText = ""
+    /// Attachments currently in the composer (images / files).
+    @Published var composerAttachments: [ComposerAttachment] = []
     @Published private(set) var isLoading: Bool
     @Published private(set) var isRunning: Bool
     @Published private(set) var isConnected = false
@@ -19,6 +22,9 @@ final class ChatSessionViewModel: ObservableObject {
     @Published private(set) var isModelLoading = false
     @Published private(set) var isModelSelecting = false
     @Published private(set) var metrics: AgentSessionMetrics?
+    @Published private(set) var permissionOptions: [AgentPermissionOption] = []
+    @Published private(set) var currentPermission: String?
+    @Published private(set) var permissionToast: String?
 
     let agentName: String
     let agentKind: AgentServerKind
@@ -33,6 +39,7 @@ final class ChatSessionViewModel: ObservableObject {
     private let onPromptAccepted: @MainActor (String) -> Void
     private var eventTask: Task<Void, Never>?
     private var startupTask: Task<Void, Never>?
+    private var permissionToastSuppressUntil: Date?
     private var toolDetails: [String: String] = [:]
     private(set) var hasStarted = false
     private var isFetchingModels = false
@@ -71,6 +78,17 @@ final class ChatSessionViewModel: ObservableObject {
         modelCatalog = nil
         isModelLoading = true
 
+        // Pre-load cached permission so the server's initial permissionChanged
+        // event on connect doesn't trigger a spurious "权限已切换" toast.
+        if let storedSession,
+           let cached = SessionContentCache.load(sessionID: storedSession.id) {
+            currentPermission = cached.currentPermission
+        }
+        // Suppress permission toast for the first 5 seconds after start — the
+        // server may push the current permission as a permissionChanged event
+        // during connection handshake, which is not a user-initiated change.
+        permissionToastSuppressUntil = Date().addingTimeInterval(5)
+
         eventTask = Task { [weak self] in
             await self?.observeEvents()
         }
@@ -82,8 +100,25 @@ final class ChatSessionViewModel: ObservableObject {
                 isConnected = true
                 isReconnecting = false
                 if let storedSession {
+                    // Show cached content instantly if available, then refresh from server.
+                    if let cached = SessionContentCache.load(sessionID: storedSession.id) {
+                        applyCached(cached)
+                    }
                     let context = try await gateway.openSession(storedSession)
                     apply(context)
+                    // Persist for next fast-open.
+                    SessionContentCache.save(
+                        sessionID: storedSession.id,
+                        content: CachedSessionContent(
+                            messages: context.messages,
+                            title: context.title,
+                            contextUsageRatio: context.metrics?.contextUsageRatio,
+                            cacheHitRatio: context.metrics?.cacheHitRatio,
+                            permissionOptions: context.permissionOptions ?? [],
+                            currentPermission: context.currentPermission,
+                            savedAt: Date()
+                        )
+                    )
                     await loadModels()
                 } else {
                     let context = try await gateway.createSession(in: workspace)
@@ -93,6 +128,10 @@ final class ChatSessionViewModel: ObservableObject {
                     await loadModels()
                 }
                 errorMessage = nil
+            } catch is CancellationError {
+                // 启动任务被取消（如重连、视图消失），不展示顶部错误
+            } catch let error as URLError where error.code == .cancelled {
+                // 同上：连接被主动取消
             } catch {
                 isLoading = false
                 isConnected = false
@@ -123,11 +162,65 @@ final class ChatSessionViewModel: ObservableObject {
 
     func send() async {
         let text = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, !isLoading else { return }
+        let attachments = composerAttachments
+        guard !text.isEmpty || !attachments.isEmpty else { return }
+        guard !isLoading else { return }
 
         let requestID = UUID().uuidString
         composerText = ""
+        composerAttachments = []
         errorMessage = nil
+
+        // Build message attachments for local rendering.
+        let messageAttachments = attachments.map { att -> MessageAttachment in
+            var localImageName: String? = nil
+            if let image = att.image {
+                localImageName = AttachmentCache.saveImage(image, id: att.id)
+            }
+            return MessageAttachment(
+                id: att.id,
+                kind: att.kind,
+                name: att.name,
+                size: att.size,
+                mimeType: att.mimeType,
+                url: att.remoteURL,
+                localImageName: localImageName
+            )
+        }
+
+        // Build content blocks for multimodal send.
+        // Hermes supports native file upload via /upload; include both images
+        // and files. DSH uses base64 image blocks; files are described in text.
+        let supportsNativeFiles = gateway is HermesAgentGateway
+        let imageBlocks = attachments.compactMap { att -> ImageContentBlock? in
+            if att.kind == .image, let image = att.image {
+                let data = image.jpegData(compressionQuality: 0.9) ?? Data()
+                return ImageContentBlock(
+                    data: data,
+                    name: att.name,
+                    mediaType: att.mimeType ?? "image/jpeg"
+                )
+            }
+            if supportsNativeFiles, att.kind == .file, let url = att.fileURL,
+               let data = try? Data(contentsOf: url) {
+                return ImageContentBlock(
+                    data: data,
+                    name: att.name,
+                    mediaType: att.mimeType ?? "application/octet-stream"
+                )
+            }
+            return nil
+        }
+
+        // File attachments are described in text for gateways that don't
+        // support native file upload.
+        let fileAttachments = supportsNativeFiles ? [] : attachments.filter { $0.kind == .file }
+        var sendText = text
+        if !fileAttachments.isEmpty {
+            let descriptors = fileAttachments.map { $0.descriptor }.joined(separator: "\n")
+            sendText = text.isEmpty ? descriptors : "\(descriptors)\n\n\(text)"
+        }
+
         messages.append(ConversationMessage(
             id: requestID,
             role: .user,
@@ -136,7 +229,8 @@ final class ChatSessionViewModel: ObservableObject {
             timestamp: Date(),
             sequence: nextSequence,
             isStreaming: false,
-            isPending: true
+            isPending: true,
+            attachments: messageAttachments
         ))
         isRunning = true
 
@@ -154,7 +248,8 @@ final class ChatSessionViewModel: ObservableObject {
             }
 
             try await sendPromptWithSessionRecovery(
-                text: text,
+                images: imageBlocks,
+                text: sendText,
                 sessionID: activeRuntimeID,
                 requestID: requestID
             )
@@ -165,9 +260,134 @@ final class ChatSessionViewModel: ObservableObject {
         } catch {
             messages.removeAll { $0.id == requestID }
             composerText = text
+            composerAttachments = attachments
             isRunning = false
             errorMessage = error.localizedDescription
         }
+    }
+
+    // MARK: - Composer Attachment Management
+
+    func addComposerImage(_ image: UIImage, name: String? = nil) {
+        let fileName = name ?? "photo_\(Int(Date().timeIntervalSince1970)).jpg"
+        let data = image.jpegData(compressionQuality: 0.9) ?? Data()
+        let attachment = ComposerAttachment(
+            kind: .image,
+            name: fileName,
+            size: Int64(data.count),
+            image: image,
+            mimeType: "image/jpeg"
+        )
+        attachment.status = .ready
+        composerAttachments.append(attachment)
+    }
+
+    func addComposerFile(url: URL) {
+        // The document picker with asCopy:true gives us a temp copy; move it
+        // into a stable location so it persists for the session.
+        let stableURL = makeStableFileURL(for: url)
+        do {
+            if FileManager.default.fileExists(atPath: stableURL.path) {
+                try FileManager.default.removeItem(at: stableURL)
+            }
+            try FileManager.default.copyItem(at: url, to: stableURL)
+        } catch {
+            // Fall back to the original URL if copy fails.
+        }
+
+        let attributes = try? FileManager.default.attributesOfItem(atPath: stableURL.path)
+        let size = (attributes?[.size] as? NSNumber)?.int64Value ?? 0
+        let attachment = ComposerAttachment(
+            kind: .file,
+            name: url.lastPathComponent,
+            size: size,
+            fileURL: stableURL,
+            mimeType: AttachmentHelper.mimeType(for: url)
+        )
+        attachment.status = .ready
+        composerAttachments.append(attachment)
+    }
+
+    func removeComposerAttachment(id: String) {
+        if let index = composerAttachments.firstIndex(where: { $0.id == id }) {
+            let attachment = composerAttachments.remove(at: index)
+            // Clean up stable file copy if it exists.
+            if let fileURL = attachment.fileURL {
+                try? FileManager.default.removeItem(at: fileURL)
+            }
+        }
+    }
+
+    func clearComposerAttachments() {
+        for attachment in composerAttachments {
+            if let fileURL = attachment.fileURL {
+                try? FileManager.default.removeItem(at: fileURL)
+            }
+        }
+        composerAttachments.removeAll()
+    }
+
+    /// Fetch attachment binary data by its DSH attachment ID (sha256:...).
+    /// Returns nil if the gateway doesn't support attachment fetching or the
+    /// fetch fails. Results are cached to disk for subsequent loads.
+    func fetchAttachmentData(attachmentId: String, id: String, ext: String = "img") async -> Data? {
+        // Check disk cache first.
+        let cacheName = "\(id).\(ext)"
+        let cacheURL = AttachmentCache.fileURL(for: cacheName)
+        if let cached = try? Data(contentsOf: cacheURL) {
+            return cached
+        }
+
+        // Wait for session to be ready (runtimeSessionID may not be set yet
+        // if the session is still being opened). Retry a few times.
+        var sessionID: String?
+        for attempt in 0..<5 {
+            if let sid = runtimeSessionID ?? storedSession?.id {
+                sessionID = sid
+                break
+            }
+            try? await Task.sleep(nanoseconds: 200_000_000) // 200ms
+        }
+        guard let sessionID else { return nil }
+
+        do {
+            let data = try await gateway.fetchAttachment(sessionID: sessionID, attachmentId: attachmentId)
+            // Cache to disk.
+            try? data.write(to: cacheURL, options: .atomic)
+            return data
+        } catch {
+            return nil
+        }
+    }
+
+    /// Fetch file data by server-side path (Hermes remotePath attachments).
+    /// Returns nil if the gateway doesn't support remote file fetching or the fetch fails.
+    func fetchRemoteFileData(path: String) async -> Data? {
+        guard let hermes = gateway as? HermesAgentGateway else { return nil }
+        // Use path hash as cache key.
+        let cacheName = "remote_\(path.hashValue).img"
+        let cacheURL = AttachmentCache.fileURL(for: cacheName)
+        if let cached = try? Data(contentsOf: cacheURL) {
+            return cached
+        }
+        do {
+            let data = try await hermes.fetchFileData(path: path)
+            try? data.write(to: cacheURL, options: .atomic)
+            return data
+        } catch {
+            print("[RemoteFile] fetch failed path=\(path) error=\(error)")
+            return nil
+        }
+    }
+
+    private func makeStableFileURL(for sourceURL: URL) -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("composer_attachments", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let ext = sourceURL.pathExtension
+        let base = sourceURL.deletingPathExtension().lastPathComponent
+        let unique = "\(base)_\(UUID().uuidString.prefix(8))"
+        return dir.appendingPathComponent(unique).appendingPathExtension(ext)
     }
 
     func sendGenUIAction(name: String, payload: [String: JSONValue]) async {
@@ -194,6 +414,24 @@ final class ChatSessionViewModel: ObservableObject {
             try await gateway.cancel(sessionID: runtimeSessionID)
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    func setPermission(_ preset: String) async {
+        guard let sessionID = runtimeSessionID ?? storedSession?.id else { return }
+        do {
+            try await gateway.setPermission(sessionID: sessionID, preset: preset)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    static func permissionLabel(_ preset: String) -> String {
+        switch preset {
+        case "read-only": return "仅可查看"
+        case "workspace-write": return "可写入工作区"
+        case "danger-full-access": return "完全权限"
+        default: return preset
         }
     }
 
@@ -382,10 +620,23 @@ final class ChatSessionViewModel: ObservableObject {
         isLoading = false
         contextModel = context.currentModel
         metrics = context.metrics
-        print("[DEBUG-VM] apply context. metrics:", context.metrics != nil ? "NON-NIL context=(context.metrics?.contextUsageRatio ?? -1) cache=(context.metrics?.cacheHitRatio ?? -1)" : "nil")
+        permissionOptions = context.permissionOptions ?? []
+        currentPermission = context.currentPermission
         if !preservingMessages {
             messages = context.messages
         }
+    }
+
+    private func applyCached(_ cached: CachedSessionContent) {
+        messages = cached.messages
+        title = cached.title
+        isLoading = false
+        metrics = AgentSessionMetrics(
+            contextUsageRatio: cached.contextUsageRatio,
+            cacheHitRatio: cached.cacheHitRatio
+        )
+        permissionOptions = cached.permissionOptions
+        currentPermission = cached.currentPermission
     }
 
     func handle(_ event: AgentGatewayEvent) {
@@ -414,7 +665,7 @@ final class ChatSessionViewModel: ObservableObject {
             messages[index].isStreaming = true
             isRunning = true
 
-        case .assistantComplete(let sessionID, let messageKey, let text, let reasoning):
+        case .assistantComplete(let sessionID, let messageKey, let text, let reasoning, let attachments):
             guard isCurrent(sessionID) else { return }
             let matchingIndex = assistantIndex(for: messageKey)
                 ?? (messageKey == nil ? activeAssistantIndex : nil)
@@ -422,11 +673,13 @@ final class ChatSessionViewModel: ObservableObject {
             if let index = matchingIndex {
                 if !text.isEmpty { messages[index].text = text }
                 if !reasoning.isEmpty { messages[index].reasoning = reasoning }
+                if !attachments.isEmpty { messages[index].attachments = attachments }
                 messages[index].isStreaming = false
-            } else if !text.isEmpty || !reasoning.isEmpty {
+            } else if !text.isEmpty || !reasoning.isEmpty || !attachments.isEmpty {
                 let index = appendAssistant(messageKey: messageKey)
                 messages[index].text = text
                 messages[index].reasoning = reasoning
+                messages[index].attachments = attachments
                 messages[index].isStreaming = false
             }
 
@@ -506,6 +759,23 @@ final class ChatSessionViewModel: ObservableObject {
             guard isCurrent(sessionID) else { return }
             metrics = metrics?.merging(newMetrics) ?? newMetrics
 
+        case .permissionChanged(let sessionID, let preset):
+            guard isCurrent(sessionID) else { return }
+            let changed = currentPermission != preset
+            currentPermission = preset
+            // Suppress toast during startup window and while startup is in flight.
+            if let suppressUntil = permissionToastSuppressUntil, Date() < suppressUntil {
+                return
+            }
+            guard changed, startupTask == nil else { return }
+            permissionToast = Self.permissionLabel(preset)
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                if permissionToast == Self.permissionLabel(preset) {
+                    permissionToast = nil
+                }
+            }
+
         case .failure(let message):
             errorMessage = message
         }
@@ -566,12 +836,13 @@ final class ChatSessionViewModel: ObservableObject {
     }
 
     private func sendPromptWithSessionRecovery(
+        images: [ImageContentBlock],
         text: String,
         sessionID: String,
         requestID: String
     ) async throws {
         do {
-            try await gateway.send(text: text, sessionID: sessionID, requestID: requestID)
+            try await gateway.send(images: images, text: text, sessionID: sessionID, requestID: requestID)
         } catch {
             guard isMissingRemoteSession(error), let storedSession else { throw error }
 
@@ -581,6 +852,7 @@ final class ChatSessionViewModel: ObservableObject {
             apply(context, preservingMessages: true)
             isRunning = true
             try await gateway.send(
+                images: images,
                 text: text,
                 sessionID: context.runtimeSessionID,
                 requestID: requestID

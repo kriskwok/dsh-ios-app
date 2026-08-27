@@ -3,6 +3,8 @@ import SwiftUI
 struct MessageRow: View {
     let message: ConversationMessage
     let onDSHUIAction: (String, [String: JSONValue]) -> Void
+    var attachmentLoader: ((String, String, String) async -> Data?)? = nil
+    var remoteFileLoader: ((String) async -> Data?)? = nil
     @State private var isReasoningExpanded = false
 
     var body: some View {
@@ -10,13 +12,24 @@ struct MessageRow: View {
         case .user:
             HStack {
                 Spacer(minLength: 48)
-                MarkdownText(message.text)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 15)
-                    .padding(.vertical, 11)
-                    .background(Color.accentColor.opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: 19, style: .continuous))
-                    .opacity(message.isPending ? 0.65 : 1)
+                VStack(alignment: .trailing, spacing: 6) {
+                    if !message.attachments.isEmpty {
+                        MessageAttachmentView(
+                            attachments: message.attachments,
+                            attachmentLoader: attachmentLoader,
+                            remoteFileLoader: remoteFileLoader
+                        )
+                    }
+                    if !message.text.isEmpty {
+                        MarkdownText(message.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 15)
+                            .padding(.vertical, 11)
+                            .background(Color.accentColor.opacity(0.12))
+                            .clipShape(RoundedRectangle(cornerRadius: 19, style: .continuous))
+                    }
+                }
+                .opacity(message.isPending ? 0.65 : 1)
             }
 
         case .assistant:
@@ -49,6 +62,13 @@ struct MessageRow: View {
                             .background(Color(uiColor: .secondarySystemBackground))
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
+                }
+                if !message.attachments.isEmpty {
+                    MessageAttachmentView(
+                        attachments: message.attachments,
+                        attachmentLoader: attachmentLoader,
+                        remoteFileLoader: remoteFileLoader
+                    )
                 }
                 if !message.text.isEmpty {
                     DSHUIRichText(message.text, onAction: onDSHUIAction)

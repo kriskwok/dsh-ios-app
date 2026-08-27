@@ -1,7 +1,7 @@
 import Foundation
 
-struct ConversationMessage: Identifiable, Equatable, Sendable {
-    enum Role: Equatable, Sendable {
+struct ConversationMessage: Identifiable, Equatable, Codable, Sendable {
+    enum Role: String, Equatable, Codable, Sendable {
         case user
         case assistant
         case activity
@@ -15,6 +15,31 @@ struct ConversationMessage: Identifiable, Equatable, Sendable {
     var sequence: Int
     var isStreaming: Bool
     var isPending: Bool
+    /// Attachments (images / files) carried by this message.
+    /// Used for local rendering; backend multimodal protocol TBD.
+    var attachments: [MessageAttachment]
+
+    init(
+        id: String,
+        role: Role,
+        text: String,
+        reasoning: String,
+        timestamp: Date,
+        sequence: Int,
+        isStreaming: Bool,
+        isPending: Bool,
+        attachments: [MessageAttachment] = []
+    ) {
+        self.id = id
+        self.role = role
+        self.text = text
+        self.reasoning = reasoning
+        self.timestamp = timestamp
+        self.sequence = sequence
+        self.isStreaming = isStreaming
+        self.isPending = isPending
+        self.attachments = attachments
+    }
 }
 
 struct ConversationProjector: Sendable {
@@ -41,7 +66,7 @@ struct ConversationProjector: Sendable {
             case "user/message":
                 guard event.data["source"]?["kind"]?.stringValue == "user" else { continue }
                 let content = Self.content(from: event.data["content"])
-                guard !content.text.isEmpty else { continue }
+                guard !content.text.isEmpty || !content.attachments.isEmpty else { continue }
                 output.append(ConversationMessage(
                     id: event.data["id"]?.stringValue ?? "user-\(event.sequence)",
                     role: .user,
@@ -50,7 +75,8 @@ struct ConversationProjector: Sendable {
                     timestamp: event.time,
                     sequence: event.sequence,
                     isStreaming: false,
-                    isPending: false
+                    isPending: false,
+                    attachments: content.attachments
                 ))
 
             case "assistant/chunk":
@@ -79,7 +105,7 @@ struct ConversationProjector: Sendable {
                 let key = Self.stepKey(event.data)
                 let message = event.data["message"] ?? event.data
                 let content = Self.content(from: message["content"])
-                guard !content.text.isEmpty || !content.reasoning.isEmpty else { continue }
+                guard !content.text.isEmpty || !content.reasoning.isEmpty || !content.attachments.isEmpty else { continue }
 
                 let projected = ConversationMessage(
                     id: message["id"]?.stringValue ?? "assistant-\(key)",
@@ -89,7 +115,8 @@ struct ConversationProjector: Sendable {
                     timestamp: event.time,
                     sequence: event.sequence,
                     isStreaming: false,
-                    isPending: false
+                    isPending: false,
+                    attachments: content.attachments
                 )
                 if let index = assistantIndexes[key] {
                     output[index] = projected
@@ -148,7 +175,7 @@ struct ConversationProjector: Sendable {
             }
         }
 
-        return output.filter { !$0.text.isEmpty || !$0.reasoning.isEmpty || $0.role == .activity }
+        return output.filter { !$0.text.isEmpty || !$0.reasoning.isEmpty || !$0.attachments.isEmpty || $0.role == .activity }
     }
 
     static func userRPCId(from event: DSHSessionEvent) -> String? {
@@ -197,20 +224,129 @@ struct ConversationProjector: Sendable {
         }
     }
 
-    private static func content(from value: JSONValue?) -> (text: String, reasoning: String) {
-        guard let blocks = value?.arrayValue else { return ("", "") }
+    private static func content(from value: JSONValue?) -> (text: String, reasoning: String, attachments: [MessageAttachment]) {
+        guard let blocks = value?.arrayValue else { return ("", "", []) }
         var text: [String] = []
         var reasoning: [String] = []
+        var attachments: [MessageAttachment] = []
         for block in blocks {
             switch block["type"]?.stringValue {
             case "text":
                 if let value = block["text"]?.stringValue, !value.isEmpty { text.append(value) }
             case "reasoning":
                 if let value = block["text"]?.stringValue, !value.isEmpty { reasoning.append(value) }
+            case "image":
+                if let att = Self.imageAttachment(from: block) {
+                    attachments.append(att)
+                }
+            case "file":
+                if let att = Self.fileAttachment(from: block) {
+                    attachments.append(att)
+                }
             default:
                 continue
             }
         }
-        return (text.joined(separator: "\n\n"), reasoning.joined(separator: "\n\n"))
+        return (
+            text.joined(separator: "\n\n"),
+            reasoning.joined(separator: "\n\n"),
+            attachments
+        )
+    }
+
+    private static func imageAttachment(from block: JSONValue) -> MessageAttachment? {
+        // Backend may nest metadata under "attachment"; prefer those fields.
+        let att = block["attachment"]?.objectValue
+        func field(_ key: String) -> JSONValue? {
+            if let att, let v = att[key] { return v }
+            return block[key]
+        }
+
+        let attachmentId = field("attachmentId")?.stringValue
+        // Use attachmentId as the stable local id when available (it is the
+        // canonical content-addressable reference), otherwise fall back.
+        let rawId = block["id"]?.stringValue
+        let id = attachmentId ?? rawId ?? UUID().uuidString
+        let name = field("name")?.stringValue ?? "image.png"
+        let mediaType = field("mediaType")?.stringValue ?? "image/png"
+        let base64Data = field("data")?.stringValue
+        let size: Int64 = {
+            if let bytes = field("bytes")?.intValue { return Int64(bytes) }
+            if let bytes = field("size")?.intValue { return Int64(bytes) }
+            if let base64 = base64Data { return Int64(base64.count * 3 / 4) }
+            return 0
+        }()
+        return MessageAttachment(
+            id: id,
+            kind: .image,
+            name: name,
+            size: size,
+            mimeType: mediaType,
+            attachmentId: attachmentId,
+            base64Data: base64Data
+        )
+    }
+
+    private static func fileAttachment(from block: JSONValue) -> MessageAttachment? {
+        let att = block["attachment"]?.objectValue
+        func field(_ key: String) -> JSONValue? {
+            if let att, let v = att[key] { return v }
+            return block[key]
+        }
+        let attachmentId = field("attachmentId")?.stringValue
+        let rawId = block["id"]?.stringValue
+        let id = attachmentId ?? rawId ?? UUID().uuidString
+        let name = field("name")?.stringValue ?? "file"
+        let mediaType = field("mediaType")?.stringValue
+        let size = Int64(field("bytes")?.intValue ?? field("size")?.intValue ?? 0)
+        return MessageAttachment(
+            id: id,
+            kind: .file,
+            name: name,
+            size: size,
+            mimeType: mediaType,
+            attachmentId: attachmentId
+        )
+    }
+}
+
+// MARK: - Session Content Cache
+
+/// Cached snapshot of a session's displayable content, persisted to disk so that
+/// switching back to a previously opened session shows messages instantly while
+/// the server refresh runs in the background.
+struct CachedSessionContent: Codable, Sendable {
+    let messages: [ConversationMessage]
+    let title: String
+    let contextUsageRatio: Double?
+    let cacheHitRatio: Double?
+    let permissionOptions: [AgentPermissionOption]
+    let currentPermission: String?
+    let savedAt: Date
+}
+
+enum SessionContentCache {
+    private static let directory: URL = {
+        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("session_content", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }()
+
+    private static func fileURL(sessionID: String) -> URL {
+        let safe = sessionID.replacingOccurrences(of: "/", with: "_")
+        return directory.appendingPathComponent("\(safe).json")
+    }
+
+    static func load(sessionID: String) -> CachedSessionContent? {
+        let url = fileURL(sessionID: sessionID)
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode(CachedSessionContent.self, from: data)
+    }
+
+    static func save(sessionID: String, content: CachedSessionContent) {
+        let url = fileURL(sessionID: sessionID)
+        guard let data = try? JSONEncoder().encode(content) else { return }
+        try? data.write(to: url, options: .atomic)
     }
 }

@@ -17,7 +17,7 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.2.1</string>
+	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
@@ -29,8 +29,14 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>需要使用相机来拍照并发送给 AI。</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>DSH needs local network access when you connect to a server on your LAN.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>需要保存拍照结果到相册。</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>需要访问相册来选择照片并发送给 AI。</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchScreen</key>

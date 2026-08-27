@@ -20,6 +20,7 @@ final class AppShellViewModel: ObservableObject {
     @Published private(set) var pendingResponseIDs: Set<String> = []
     @Published private(set) var isLoading = false
     @Published var errorMessage: String?
+    @Published var operationError: String?
     @Published private(set) var target = ConversationTarget()
 
     private var gateway: (any AgentGateway)?
@@ -153,6 +154,52 @@ final class AppShellViewModel: ObservableObject {
         if target.session?.id == sessionID {
             target.session?.isRunning = isRunning
         }
+    }
+
+    func renameSession(_ session: AgentSessionSummary, title: String) async {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != session.title else { return }
+        do {
+            try await gateway?.renameSession(session.id, title: trimmed)
+            if let index = sessions.firstIndex(where: { $0.id == session.id }) {
+                sessions[index].title = trimmed
+            }
+            if target.session?.id == session.id {
+                target.session?.title = trimmed
+            }
+            persistCache()
+            operationError = nil
+        } catch {
+            operationError = "重命名失败：\(error.localizedDescription)"
+        }
+    }
+
+    func archiveSession(_ session: AgentSessionSummary, archived: Bool) async {
+        do {
+            try await gateway?.archiveSession(session.id, archived: archived)
+            if archived {
+                archivedSessionIDs.insert(session.id)
+            } else {
+                archivedSessionIDs.remove(session.id)
+            }
+            if target.session?.id == session.id, archived {
+                target = ConversationTarget()
+            }
+            persistCache()
+            operationError = nil
+        } catch {
+            operationError = "归档失败：\(error.localizedDescription)"
+        }
+    }
+
+    private func persistCache() {
+        guard let pid = currentProfileID else { return }
+        let snapshot = AgentNavigationSnapshot(
+            sessions: sessions,
+            workspaces: workspaces,
+            archivedSessionIDs: archivedSessionIDs
+        )
+        Self.saveCache(profileID: pid, snapshot: snapshot)
     }
 
     func sessions(in workspace: AgentWorkspace) -> [AgentSessionSummary] {

@@ -20,8 +20,9 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: app.dsh.mobile.client
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CURRENT_PROJECT_VERSION: 1
-        MARKETING_VERSION: 0.2.1
+        MARKETING_VERSION: 0.3.0
         CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: K9GJS8JXMH
     info:
       path: DSHIOSApp/Info.plist
       properties:
@@ -29,6 +30,9 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         LSRequiresIPhoneOS: true
         NSLocalNetworkUsageDescription: DSH needs local network access when you connect to a server on your LAN.
+        NSCameraUsageDescription: 需要使用相机来拍照并发送给 AI。
+        NSPhotoLibraryUsageDescription: 需要访问相册来选择照片并发送给 AI。
+        NSPhotoLibraryAddUsageDescription: 需要保存拍照结果到相册。
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         UIApplicationSupportsIndirectInputEvents: true
