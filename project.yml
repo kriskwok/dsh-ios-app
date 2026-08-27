@@ -27,6 +27,8 @@ targets:
       path: DSHIOSApp/Info.plist
       properties:
         CFBundleDisplayName: AI
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         ITSAppUsesNonExemptEncryption: false
         LSRequiresIPhoneOS: true
         NSLocalNetworkUsageDescription: DSH needs local network access when you connect to a server on your LAN.
